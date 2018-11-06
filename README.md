@@ -1,3 +1,5 @@
 # driving
 
-We will be porting the code from our other repository to here by tomorrow!
+Reinforcement Learning Agent for the Lane Following task.
+
+The simulator and baselines are taken from [gym-duckietown](https://github.com/duckietown/gym-duckietown)
