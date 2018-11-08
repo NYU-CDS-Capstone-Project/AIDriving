@@ -52,8 +52,9 @@ class CNNPolicy(FFPolicy):
         self.linear1_drop = nn.Dropout(p=0.5)
         self.linear1 = nn.Linear(32 * 74 * 54, 256)
 
+        self.gruhdim = 256
         if use_gru:
-            self.gru = nn.GRUCell(512, 512)
+            self.gru = nn.GRUCell(self.gruhdim, self.gruhdim)
 
         self.critic_linear = nn.Linear(256, 1)
 
@@ -72,7 +73,7 @@ class CNNPolicy(FFPolicy):
     @property
     def state_size(self):
         if hasattr(self, 'gru'):
-            return 512
+            return self.gruhdim
         else:
             return 1
 
