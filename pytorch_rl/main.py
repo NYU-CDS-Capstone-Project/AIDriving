@@ -111,6 +111,10 @@ def main():
     # These variables are used to compute average rewards for all processes.
     total_episode_rewards_avg = []
     total_episode_lengths_avg = []
+    total_value_loss = []
+    total_action_loss = []
+    total_entropy = []
+
     episode_rewards = torch.zeros([args.num_processes, 1])
     final_rewards = torch.zeros([args.num_processes, 1])
     episode_lengths = torch.zeros([args.num_processes, 1])
@@ -144,11 +148,10 @@ def main():
             # This code deals poorly with large reward values
             reward = np.clip(reward, a_min=0, a_max=None) / 400
 
-            scaled_reward = np.clip(reward + 0.4, a_min = -3.0, a_max=None)
-            
+            scaled_reward = np.clip(reward + 0.4, a_min = -3.0, a_max=None)            
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
-            reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
+            reward = np.clip(reward, a_min=-4.0, a_max=None)
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
             episode_lengths += 1
@@ -274,13 +277,16 @@ def main():
                             hasattr(envs, 'ob_rms') and envs.ob_rms or None]
 
             torch.save(save_model, os.path.join(save_path, args.env_name + "_" + args.name + ".pt"))
-            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_episode_lengths_avg]))
+            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_episode_lengths_avg, total_value_loss, total_action_loss, total_entropy]))
 
         if j % args.log_interval == 0:
             reward_avg = 0.99 * reward_avg + 0.01 * final_rewards.mean()
             length_avg = 0.99 * length_avg + 0.01 * final_lengths.mean()
             total_episode_rewards_avg.append(reward_avg)
             total_episode_lengths_avg.append(length_avg)
+            total_value_loss.append(value_loss.data[0])
+            total_action_loss.append(action_loss.data[0])
+            total_entropy.append(dist_entropy.data[0])
             end = time.time()
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
 
