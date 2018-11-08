@@ -462,7 +462,7 @@ class Simulator(gym.Env):
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle
 
-        logger.info('Starting at %s %s' % (self.cur_pos, self.cur_angle))
+        #logger.info('Starting at %s %s' % (self.cur_pos, self.cur_angle))
 
         # Generate the first camera image
         obs = self.render_obs()
@@ -1194,14 +1194,14 @@ class Simulator(gym.Env):
         if not self._valid_pose(self.cur_pos, self.cur_angle):
             msg = 'Stopping the simulator because we are at an invalid pose.'
             misc['Simulator']['msg'] = msg
-            logger.info(msg)
+            #logger.info(msg)
             reward = REWARD_INVALID_POSE
             done = True
         # If the maximum time step count is reached
         elif self.step_count >= self.max_steps:
             msg = 'Stopping the simulator because we reached max_steps = %s' % self.max_steps
             misc['Simulator']['msg'] = msg
-            logger.info(msg)
+            #logger.info(msg)
             done = True
             reward = 0
         else:
