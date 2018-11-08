@@ -23,13 +23,16 @@ parser.add_argument('--load-dir', default='./trained_models/',
                     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument('--start-container', action='store_true', default=False,
                     help='start the Duckietown container image')
+parser.add_argument('--name', default='noname',
+                    help='name of the model')
 
 args = parser.parse_args()
 
 env = make_env(args.env_name, args.seed, 0, None, args.start_container)
 env = DummyVecEnv([env])
 
-actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
+#actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
+actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + "_" + args.name + ".pt"))
 
 render_func = env.envs[0].render
 
@@ -61,6 +64,10 @@ def on_key_press(symbol, modifiers):
     return
 
 try:
+    env.envs[0].unwrapped.max_steps = 800
+    actions = []
+    rewards = []
+
     while True:
         value, action, _, states = actor_critic.act(
             Variable(current_obs),
@@ -71,11 +78,22 @@ try:
         states = states.data
         cpu_actions = action.data.squeeze(1).cpu().numpy()
 
-        print(cpu_actions)
-
         # Obser reward and next obs
         obs, reward, done, _ = env.step(cpu_actions)
         time.sleep(1 / env.envs[0].unwrapped.frame_rate)
+
+        actions.append(cpu_actions)
+        rewards.append(reward)
+
+        if reward == -1000 or step == env.envs[0].unwrapped.max_steps-1:
+            print([a[0] for a in actions])
+            print([r[0] for r in rewards])
+            actions = []
+            rewards = []
+            print("#############")    
+        actions.append(cpu_actions)
+        rewards.append(reward)
+
 
         masks.fill_(0.0 if done else 1.0)
 
