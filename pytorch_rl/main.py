@@ -137,12 +137,12 @@ def main():
 
             # Maxime: clip the reward within [0,1] for more reliable training
             # This code deals poorly with large reward values
-            reward = np.clip(reward, a_min=0, a_max=None) / 400
+            #reward = np.clip(reward, a_min=0, a_max=None) / 400
 
             scaled_reward = np.clip(reward + 0.4, a_min = -3.0, a_max=None)            
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
-            reward = np.clip(reward, a_min=-4.0, a_max=None)
+            reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
             episode_lengths += 1
