@@ -52,6 +52,8 @@ def main():
 
     envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.start_container)
                 for i in range(args.num_processes)]
+    for i in range(args.num_processes):
+        envs[i].max_steps = 1200
 
     if args.num_processes > 1:
         envs = SubprocVecEnv(envs)
@@ -107,9 +109,15 @@ def main():
     rollouts.observations[0].copy_(current_obs)
 
     # These variables are used to compute average rewards for all processes.
+    total_episode_rewards_avg = []
+    total_episode_lengths_avg = []
     episode_rewards = torch.zeros([args.num_processes, 1])
     final_rewards = torch.zeros([args.num_processes, 1])
+    episode_lengths = torch.zeros([args.num_processes, 1])
+    final_lengths = torch.zeros([args.num_processes, 1])
+
     reward_avg = 0
+    length_avg = 0
 
     if args.cuda:
         current_obs = current_obs.cuda()
@@ -125,6 +133,9 @@ def main():
                 Variable(rollouts.masks[step])
             )
             cpu_actions = action.data.squeeze(1).cpu().numpy()
+            # Exploration epsilon greedy
+            if np.random.random_sample() < 0.2:
+                cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
 
             # Observation, reward and next obs
             obs, reward, done, info = envs.step(cpu_actions)
@@ -133,14 +144,23 @@ def main():
             # This code deals poorly with large reward values
             reward = np.clip(reward, a_min=0, a_max=None) / 400
 
+            scaled_reward = np.clip(reward + 0.4, a_min = -3.0, a_max=None)
+            
+            scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
+
+            reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
+            episode_lengths += 1
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
             final_rewards *= masks
+            final_lengths *= masks
             final_rewards += (1 - masks) * episode_rewards
+            final_lengths += (1 - masks) * episode_lengths
             episode_rewards *= masks
+            episode_lengths *= masks
 
             if args.cuda:
                 masks = masks.cuda()
@@ -151,7 +171,7 @@ def main():
                 current_obs *= masks
 
             update_current_obs(obs)
-            rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, reward, masks)
+            rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, scaled_reward, masks)
 
         next_value = actor_critic(
             Variable(rollouts.observations[-1]),
@@ -253,20 +273,26 @@ def main():
             save_model = [save_model,
                             hasattr(envs, 'ob_rms') and envs.ob_rms or None]
 
-            torch.save(save_model, os.path.join(save_path, args.env_name + ".pt"))
+            torch.save(save_model, os.path.join(save_path, args.env_name + "_" + args.name + ".pt"))
+            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_epis
+
 
         if j % args.log_interval == 0:
             reward_avg = 0.99 * reward_avg + 0.01 * final_rewards.mean()
+            length_avg = 0.99 * length_avg + 0.01 * final_lengths.mean()
+            total_episode_rewards_avg.append(reward_avg)
+            total_episode_lengths_avg.append(length_avg)
             end = time.time()
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
 
             print(
-                "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
+                "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
                 format(
                     j,
                     total_num_steps,
                     int(total_num_steps / (end - start)),
                     reward_avg,
+                    length_avg,
                     dist_entropy.data[0],
                     value_loss.data[0],
                     action_loss.data[0]
