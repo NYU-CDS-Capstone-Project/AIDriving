@@ -43,16 +43,23 @@ class DiagGaussian(nn.Module):
         super(DiagGaussian, self).__init__()
         self.fc_mean = nn.Linear(num_inputs, num_outputs)
         self.logstd = AddBias(torch.zeros(num_outputs))
+        self.num_outputs = num_outputs
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
+        action_mean[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean[:, 0]) / 2.5
+        action_mean[:, 1] = torch.nn.functional.tanh(action_mean[:, 1])
 
         #  An ugly hack for my KFAC implementation.
         zeros = Variable(torch.zeros(action_mean.size()), volatile=x.volatile)
         if x.is_cuda:
             zeros = zeros.cuda()
 
-        action_logstd = self.logstd(zeros)
+        action_logstd = Variable(torch.zeros(self.num_outputs))
+        #action_logstd = self.logstd(zeros)
+        if x.is_cuda:
+            action_logstd = action_logstd.cuda()
+        #action_logstd = torch.nn.functional.sigmoid(self.logstd(zeros)) / 3
         return action_mean, action_logstd
 
     def sample(self, x, deterministic):
