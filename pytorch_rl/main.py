@@ -24,11 +24,6 @@ from visualize import visdom_plot
 
 args = get_args()
 
-assert args.algo in ['a2c', 'ppo', 'acktr']
-if args.recurrent_policy:
-    assert args.algo in ['a2c', 'ppo'], \
-        'Recurrent policy is not implemented for ACKTR'
-
 num_updates = int(args.num_frames) // args.num_steps // args.num_processes
 
 torch.manual_seed(args.seed)
@@ -88,10 +83,6 @@ def main():
 
     if args.algo == 'a2c':
         optimizer = optim.RMSprop(actor_critic.parameters(), args.lr, eps=args.eps, alpha=args.alpha)
-    elif args.algo == 'ppo':
-        optimizer = optim.Adam(actor_critic.parameters(), args.lr, eps=args.eps)
-    elif args.algo == 'acktr':
-        optimizer = KFACOptimizer(actor_critic)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape, envs.action_space, actor_critic.state_size)
     current_obs = torch.zeros(args.num_processes, *obs_shape)
@@ -129,6 +120,7 @@ def main():
 
     start = time.time()
     for j in range(num_updates):
+        #Running an episode
         for step in range(args.num_steps):
             # Sample actions
             value, action, action_log_prob, states = actor_critic.act(
@@ -184,7 +176,8 @@ def main():
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma, args.tau)
 
-        if args.algo in ['a2c', 'acktr']:
+        #Performing Actor Critic Updates
+        if args.algo in ['a2c']:
             values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(Variable(rollouts.observations[:-1].view(-1, *obs_shape)),
                                                                                            Variable(rollouts.states[0].view(-1, actor_critic.state_size)),
                                                                                            Variable(rollouts.masks[:-1].view(-1, 1)),
@@ -198,23 +191,6 @@ def main():
 
             action_loss = -(Variable(advantages.data) * action_log_probs).mean()
 
-            if args.algo == 'acktr' and optimizer.steps % optimizer.Ts == 0:
-                # Sampled fisher, see Martens 2014
-                actor_critic.zero_grad()
-                pg_fisher_loss = -action_log_probs.mean()
-
-                value_noise = Variable(torch.randn(values.size()))
-                if args.cuda:
-                    value_noise = value_noise.cuda()
-
-                sample_values = values + value_noise
-                vf_fisher_loss = -(values - Variable(sample_values.data)).pow(2).mean()
-
-                fisher_loss = pg_fisher_loss + vf_fisher_loss
-                optimizer.acc_stats = True
-                fisher_loss.backward(retain_graph=True)
-                optimizer.acc_stats = False
-
             optimizer.zero_grad()
             (value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef).backward()
 
@@ -223,44 +199,9 @@ def main():
 
             optimizer.step()
 
-        elif args.algo == 'ppo':
-            advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
-
-            for e in range(args.ppo_epoch):
-                if args.recurrent_policy:
-                    data_generator = rollouts.recurrent_generator(advantages,
-                                                            args.num_mini_batch)
-                else:
-                    data_generator = rollouts.feed_forward_generator(advantages,
-                                                            args.num_mini_batch)
-
-                for sample in data_generator:
-                    observations_batch, states_batch, actions_batch, \
-                       return_batch, masks_batch, old_action_log_probs_batch, \
-                            adv_targ = sample
-
-                    # Reshape to do in a single forward pass for all steps
-                    values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(Variable(observations_batch),
-                                                                                                   Variable(states_batch),
-                                                                                                   Variable(masks_batch),
-                                                                                                   Variable(actions_batch))
-
-                    adv_targ = Variable(adv_targ)
-                    ratio = torch.exp(action_log_probs - Variable(old_action_log_probs_batch))
-                    surr1 = ratio * adv_targ
-                    surr2 = torch.clamp(ratio, 1.0 - args.clip_param, 1.0 + args.clip_param) * adv_targ
-                    action_loss = -torch.min(surr1, surr2).mean() # PPO's pessimistic surrogate (L^CLIP)
-
-                    value_loss = (Variable(return_batch) - values).pow(2).mean()
-
-                    optimizer.zero_grad()
-                    (value_loss + action_loss - dist_entropy * args.entropy_coef).backward()
-                    nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
-                    optimizer.step()
-
         rollouts.after_update()
 
+        #Saving the model
         if j % args.save_interval == 0 and args.save_dir != "":
             save_path = os.path.join(args.save_dir, args.algo)
             try:
@@ -279,6 +220,7 @@ def main():
             torch.save(save_model, os.path.join(save_path, args.env_name + "_" + args.name + ".pt"))
             np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_episode_lengths_avg, total_value_loss, total_action_loss, total_entropy]))
 
+        #Logging the model
         if j % args.log_interval == 0:
             reward_avg = 0.99 * reward_avg + 0.01 * final_rewards.mean()
             length_avg = 0.99 * length_avg + 0.01 * final_lengths.mean()
