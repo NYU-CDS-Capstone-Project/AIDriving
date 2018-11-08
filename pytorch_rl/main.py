@@ -274,8 +274,7 @@ def main():
                             hasattr(envs, 'ob_rms') and envs.ob_rms or None]
 
             torch.save(save_model, os.path.join(save_path, args.env_name + "_" + args.name + ".pt"))
-            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_epis
-
+            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_episode_lengths_avg]))
 
         if j % args.log_interval == 0:
             reward_avg = 0.99 * reward_avg + 0.01 * final_rewards.mean()
