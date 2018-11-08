@@ -17,13 +17,13 @@ class DiscreteWrapper(gym.ActionWrapper):
     def action(self, action):
         # Turn left
         if action == 0:
-            vels = [0.6, +1.0]
+            vels = [0.4, +1.0]
         # Turn right
         elif action == 1:
-            vels = [0.6, -1.0]
+            vels = [0.4, -1.0]
         # Go forward
         elif action == 2:
-            vels = [0.7, 0.0]
+            vels = [0.4, 0.0]
         else:
             assert False, "unknown action"
         return np.array(vels)
