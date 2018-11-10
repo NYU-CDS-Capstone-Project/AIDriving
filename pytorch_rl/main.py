@@ -2,8 +2,6 @@ import copy
 import glob
 import os
 import time
-import operator
-from functools import reduce
 
 import gym
 import numpy as np
@@ -14,88 +12,46 @@ import torch.optim as optim
 from torch.autograd import Variable
 
 from arguments import get_args
-from vec_env.dummy_vec_env import DummyVecEnv
-from vec_env.subproc_vec_env import SubprocVecEnv
-from envs import make_env
+from envs import make_env_vec
+from utils import print_model_size, update_current_obs
 from model import CNNPolicy, MLPPolicy
 from storage import RolloutStorage
-from visualize import visdom_plot
 
 args = get_args()
-
-num_updates = int(args.num_frames) // args.num_steps // args.num_processes
-
 torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-try:
-    os.makedirs(args.log_dir)
-except OSError:
-    files = glob.glob(os.path.join(args.log_dir, '*.monitor.csv'))
-    for f in files:
-        os.remove(f)
+class ModelLogger(object):
+    def __init__(self, log_dir):
+        try:
+            os.makedirs(log_dir)
+        except OSError:
+            files = glob.glob(os.path.join(log_dir, '*.monitor.csv'))
+            for f in files:
+                os.remove(f)
 
 def main():
     os.environ['OMP_NUM_THREADS'] = '1'
+    num_updates = int(args.num_frames) // args.num_steps // args.num_processes
 
-    if args.vis:
-        from visdom import Visdom
-        viz = Visdom()
-        win = None
+    logger = ModelLogger(args.log_dir)
 
-    envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.start_container)
-                for i in range(args.num_processes)]
-    for i in range(args.num_processes):
-        envs[i].max_steps = 1200
+    envs = make_env_vec(args.num_processes, args.env_name, args.seed, args.log_dir, args.start_container, max_steps = 1200)
 
-    if args.num_processes > 1:
-        envs = SubprocVecEnv(envs)
-    else:
-        envs = DummyVecEnv(envs)
-
-    obs_shape = envs.observation_space.shape
-    obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
-    obs_numel = reduce(operator.mul, obs_shape, 1)
-
-    if len(obs_shape) == 3 and obs_numel > 1024:
-        actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy)
-    else:
-        assert not args.recurrent_policy, \
-            "Recurrent policy is not implemented for the MLP controller"
-        actor_critic = MLPPolicy(obs_numel, envs.action_space)
-
-    modelSize = 0
-    for p in actor_critic.parameters():
-        pSize = reduce(operator.mul, p.size(), 1)
-        modelSize += pSize
-    print(str(actor_critic))
-    print('Total model size: %d' % modelSize)
-
-    if envs.action_space.__class__.__name__ == "Discrete":
-        action_shape = 1
-    else:
-        action_shape = envs.action_space.shape[0]
-
-    if args.cuda:
-        actor_critic.cuda()
+    action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
+    obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
+    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy)
+    print_model_size(actor_critic)
+    if args.cuda: actor_critic.cuda()
 
     if args.algo == 'a2c':
         optimizer = optim.RMSprop(actor_critic.parameters(), args.lr, eps=args.eps, alpha=args.alpha)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape, envs.action_space, actor_critic.state_size)
     current_obs = torch.zeros(args.num_processes, *obs_shape)
-
-    def update_current_obs(obs):
-        shape_dim0 = envs.observation_space.shape[0]
-        obs = torch.from_numpy(obs).float()
-        if args.num_stack > 1:
-            current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
-        current_obs[:, -shape_dim0:] = obs
-
     obs = envs.reset()
-    update_current_obs(obs)
-
+    current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
     rollouts.observations[0].copy_(current_obs)
 
     # These variables are used to compute average rewards for all processes.
@@ -164,7 +120,7 @@ def main():
             else:
                 current_obs *= masks
 
-            update_current_obs(obs)
+            current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
             rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, scaled_reward, masks)
 
         next_value = actor_critic(
@@ -244,13 +200,6 @@ def main():
                     action_loss.data[0]
                 )
             )
-
-        if args.vis and j % args.vis_interval == 0:
-            try:
-                # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, args.log_dir, args.env_name, args.algo)
-            except IOError:
-                pass
 
 if __name__ == "__main__":
     main()

@@ -9,6 +9,9 @@ from gym.spaces.box import Box
 import gym_duckietown
 from gym_duckietown.envs import *
 from gym_duckietown.wrappers import *
+from vec_env.dummy_vec_env import DummyVecEnv
+from vec_env.subproc_vec_env import SubprocVecEnv
+
 
 def make_env(env_id, seed, rank, log_dir, start_container, discrete_wrapper=False):
     def _thunk():
@@ -29,6 +32,20 @@ def make_env(env_id, seed, rank, log_dir, start_container, discrete_wrapper=Fals
         return env
 
     return _thunk
+
+
+def make_env_vec(num_processes, env_name, seed, log_dir, start_container, max_steps = 1200, discrete_wrapper=False):
+    envs = [make_env(env_name, seed, i, log_dir, start_container, discrete_wrapper)
+                for i in range(num_processes)]
+    for i in range(num_processes):
+        envs[i].max_steps = max_steps
+
+    if num_processes > 1:
+        envs = SubprocVecEnv(envs)
+    else:
+        envs = DummyVecEnv(envs)
+    return envs
+
 
 class ScaleObservations(gym.ObservationWrapper):
     def __init__(self, env=None):

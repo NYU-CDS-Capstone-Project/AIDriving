@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+import operator
+from functools import reduce
+
 
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
@@ -43,3 +46,21 @@ def orthogonal(tensor, gain=1):
     tensor.view_as(q).copy_(q)
     tensor.mul_(gain)
     return tensor
+
+
+def print_model_size(model):
+    modelSize = 0
+    for p in model.parameters():
+        pSize = reduce(operator.mul, p.size(), 1)
+        modelSize += pSize
+    print(str(model))
+    print('Total model size: %d' % modelSize)
+
+
+def update_current_obs(obs, current_obs, shape_dim0, num_stack):
+    obs = torch.from_numpy(obs).float()
+    if num_stack > 1:
+        current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
+    current_obs[:, -shape_dim0:] = obs
+    return current_obs
+

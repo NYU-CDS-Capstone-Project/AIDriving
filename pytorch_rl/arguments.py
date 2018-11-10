@@ -33,12 +33,6 @@ def get_args():
                         help='how many training CPU processes to use')
     parser.add_argument('--num-steps', type=int, default=5,
                         help='number of forward steps in A2C (default: 5)')
-    parser.add_argument('--ppo-epoch', type=int, default=4,
-                        help='number of ppo epochs (default: 4)')
-    parser.add_argument('--num-mini-batch', type=int, default=32,
-                        help='number of batches for ppo (default: 32)')
-    parser.add_argument('--clip-param', type=float, default=0.2,
-                        help='ppo clip parameter (default: 0.2)')
     parser.add_argument('--num-stack', type=int, default=1,
                         help='number of frames to stack')
     parser.add_argument('--log-interval', type=int, default=1,
@@ -61,7 +55,6 @@ def get_args():
                         help='use a recurrent policy')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
-
     parser.add_argument('--start-container', action='store_true', default=False,
                         help='start the Duckietown container image')
 
