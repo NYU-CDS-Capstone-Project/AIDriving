@@ -16,26 +16,19 @@ from envs import make_env_vec
 from utils import print_model_size, update_current_obs
 from model import CNNPolicy, MLPPolicy
 from storage import RolloutStorage
+from logger import ModelLogger
 
 args = get_args()
 torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-class ModelLogger(object):
-    def __init__(self, log_dir):
-        try:
-            os.makedirs(log_dir)
-        except OSError:
-            files = glob.glob(os.path.join(log_dir, '*.monitor.csv'))
-            for f in files:
-                os.remove(f)
 
 def main():
     os.environ['OMP_NUM_THREADS'] = '1'
     num_updates = int(args.num_frames) // args.num_steps // args.num_processes
 
-    logger = ModelLogger(args.log_dir)
+    logger = ModelLogger(args.log_dir, args.num_processes)
 
     envs = make_env_vec(args.num_processes, args.env_name, args.seed, args.log_dir, args.start_container, max_steps = 1200)
 
@@ -53,21 +46,6 @@ def main():
     obs = envs.reset()
     current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
     rollouts.observations[0].copy_(current_obs)
-
-    # These variables are used to compute average rewards for all processes.
-    total_episode_rewards_avg = []
-    total_episode_lengths_avg = []
-    total_value_loss = []
-    total_action_loss = []
-    total_entropy = []
-
-    episode_rewards = torch.zeros([args.num_processes, 1])
-    final_rewards = torch.zeros([args.num_processes, 1])
-    episode_lengths = torch.zeros([args.num_processes, 1])
-    final_lengths = torch.zeros([args.num_processes, 1])
-
-    reward_avg = 0
-    length_avg = 0
 
     if args.cuda:
         current_obs = current_obs.cuda()
@@ -100,17 +78,10 @@ def main():
 
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
-            episode_rewards += reward
-            episode_lengths += 1
 
-            # If done then clean the history of observations.
             masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
-            final_rewards *= masks
-            final_lengths *= masks
-            final_rewards += (1 - masks) * episode_rewards
-            final_lengths += (1 - masks) * episode_lengths
-            episode_rewards *= masks
-            episode_lengths *= masks
+
+            logger.update_reward(reward, masks)
 
             if args.cuda:
                 masks = masks.cuda()
@@ -158,48 +129,11 @@ def main():
 
         #Saving the model
         if j % args.save_interval == 0 and args.save_dir != "":
-            save_path = os.path.join(args.save_dir, args.algo)
-            try:
-                os.makedirs(save_path)
-            except OSError:
-                pass
-
-            # A really ugly way to save a model to CPU
-            save_model = actor_critic
-            if args.cuda:
-                save_model = copy.deepcopy(actor_critic).cpu()
-
-            save_model = [save_model,
-                            hasattr(envs, 'ob_rms') and envs.ob_rms or None]
-
-            torch.save(save_model, os.path.join(save_path, args.env_name + "_" + args.name + ".pt"))
-            np.save(os.path.join(save_path, args.env_name + "_" + args.name + ".npy"), np.asarray([total_episode_rewards_avg, total_episode_lengths_avg, total_value_loss, total_action_loss, total_entropy]))
+            logger.save_model(args.save_dir, actor_critic, envs, args.algo, args.env_name, args.name, args.cuda)
 
         #Logging the model
         if j % args.log_interval == 0:
-            reward_avg = 0.99 * reward_avg + 0.01 * final_rewards.mean()
-            length_avg = 0.99 * length_avg + 0.01 * final_lengths.mean()
-            total_episode_rewards_avg.append(reward_avg)
-            total_episode_lengths_avg.append(length_avg)
-            total_value_loss.append(value_loss.data[0])
-            total_action_loss.append(action_loss.data[0])
-            total_entropy.append(dist_entropy.data[0])
-            end = time.time()
-            total_num_steps = (j + 1) * args.num_processes * args.num_steps
-
-            print(
-                "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
-                format(
-                    j,
-                    total_num_steps,
-                    int(total_num_steps / (end - start)),
-                    reward_avg,
-                    length_avg,
-                    dist_entropy.data[0],
-                    value_loss.data[0],
-                    action_loss.data[0]
-                )
-            )
+            logger.print_log(value_loss, action_loss, dist_entropy, args.num_processes, args.num_steps, j, start)
 
 if __name__ == "__main__":
     main()
