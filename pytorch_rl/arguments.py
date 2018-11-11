@@ -21,6 +21,8 @@ def get_args():
                         help='use generalized advantage estimation')
     parser.add_argument('--tau', type=float, default=0.95,
                         help='gae parameter (default: 0.95)')
+    parser.add_argument('--exp_probability', type=float, default=0.1,
+                        help='probability for exploration (default: 0.1)')
     parser.add_argument('--entropy-coef', type=float, default=0.01,
                         help='entropy term coefficient (default: 0.01)')
     parser.add_argument('--value-loss-coef', type=float, default=0.5,

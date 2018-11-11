@@ -63,7 +63,7 @@ def main():
             )
             cpu_actions = action.data.squeeze(1).cpu().numpy()
             # Exploration epsilon greedy
-            if np.random.random_sample() < 0.2:
+            if np.random.random_sample() < args.exp_probability:
                 cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
 
             # Observation, reward and next obs
