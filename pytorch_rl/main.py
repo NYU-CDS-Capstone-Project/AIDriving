@@ -73,7 +73,9 @@ def main():
             # This code deals poorly with large reward values
             #reward = np.clip(reward, a_min=0, a_max=None) / 400
 
-            scaled_reward = np.clip(reward + 0.4, a_min = -3.0, a_max=None)            
+            slack = 0.4
+            scaled_reward = np.clip(reward + slack, a_min = -8.0, a_max=None)
+            if scaled_reward[0] > 0: scaled_reward = (1 + scaled_reward)**3 - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0

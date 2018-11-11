@@ -47,7 +47,7 @@ class DiagGaussian(nn.Module):
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
-        action_mean[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean[:, 0]) / 2.5
+        action_mean[:, 0] = 0.5 + torch.nn.functional.sigmoid(action_mean[:, 0]) / 3.3
         action_mean[:, 1] = torch.nn.functional.tanh(action_mean[:, 1])
 
         #  An ugly hack for my KFAC implementation.
