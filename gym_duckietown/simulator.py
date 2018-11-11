@@ -1149,18 +1149,24 @@ class Simulator(gym.Env):
         info = {}
         pos = self.cur_pos
         angle = self.cur_angle
-        # Get the position relative to the right lane tangent
-        lp = self.get_lane_pos(pos, angle)
         info['action'] = list(self.last_action)
+
         if self.full_transparency:
-            info['lane_position'] = lp.as_json_dict()
             info['robot_speed'] = self.speed
-            info['proximity_penalty'] = self._proximity_penalty2(pos, angle)
             info['cur_pos'] = [float(pos[0]), float(pos[1]), float(pos[2])]
             info['cur_angle'] = float(angle)
             info['timestamp'] = self.timestamp
-            info['tile_coords'] = list(self.get_grid_coords(pos))
             info['map_data'] = self.map_data
+            info['proximity_penalty'] = self._proximity_penalty2(pos, angle)
+
+            if self._drivable_pos(pos):
+                # Get the position relative to the right lane tangent
+                lp = self.get_lane_pos(pos, angle)
+                info['lane_position'] = lp.as_json_dict()
+                info['tile_coords'] = list(self.get_grid_coords(pos))
+            else:
+                info['lane_position'] = None
+                info['tile_coords'] = None
         misc = {}
         misc['Simulator'] = info
         return misc
