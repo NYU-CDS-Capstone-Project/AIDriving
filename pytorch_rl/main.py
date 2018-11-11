@@ -72,9 +72,9 @@ def main():
             #ToDo better collision strategy
             for i, flag in enumerate(done):
                 if flag == True:
-                    envs[i].user_tile_start = info[i]['Simulator']['tile_coords']
-                    envs[i].reset()
-                    envs[i].user_tile_start = None
+                    envs.envs[i].user_tile_start = info[i]['Simulator']['tile_coords']
+                    envs.envs[i].reset()
+                    envs.envs[i].user_tile_start = None
 
             # Maxime: clip the reward within [0,1] for more reliable training
             # This code deals poorly with large reward values
