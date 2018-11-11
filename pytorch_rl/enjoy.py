@@ -31,7 +31,6 @@ args = parser.parse_args()
 env = make_env(args.env_name, args.seed, 0, None, args.start_container)
 env = DummyVecEnv([env])
 
-#actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
 actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + "_" + args.name + ".pt"))
 
 render_func = env.envs[0].render
@@ -67,7 +66,7 @@ try:
     env.envs[0].unwrapped.max_steps = 800
     actions = []
     rewards = []
-
+    step = 0
     while True:
         value, action, _, states = actor_critic.act(
             Variable(current_obs),
@@ -79,21 +78,20 @@ try:
         cpu_actions = action.data.squeeze(1).cpu().numpy()
 
         # Obser reward and next obs
-        obs, reward, done, _ = env.step(cpu_actions)
+        obs, reward, done, info = env.step(cpu_actions)
         time.sleep(1 / env.envs[0].unwrapped.frame_rate)
 
         actions.append(cpu_actions)
         rewards.append(reward)
+        step = step + 1
 
         if reward == -1000 or step == env.envs[0].unwrapped.max_steps-1:
             print([a[0] for a in actions])
             print([r[0] for r in rewards])
             actions = []
             rewards = []
+            step = 0
             print("#############")    
-        actions.append(cpu_actions)
-        rewards.append(reward)
-
 
         masks.fill_(0.0 if done else 1.0)
 

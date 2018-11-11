@@ -62,12 +62,19 @@ def main():
                 Variable(rollouts.masks[step])
             )
             cpu_actions = action.data.squeeze(1).cpu().numpy()
-            # Exploration epsilon greedy
+            # Exploration epsilon greedy, ToDo better exploration policy
             if np.random.random_sample() < args.exp_probability:
                 cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
 
             # Observation, reward and next obs
             obs, reward, done, info = envs.step(cpu_actions)
+
+            #ToDo better collision strategy
+            for i, flag in enumerate(done):
+                if flag == True:
+                    envs[i].user_tile_start = info[i]['Simulator']['tile_coords']
+                    envs[i].reset()
+                    envs[i].user_tile_start = None
 
             # Maxime: clip the reward within [0,1] for more reliable training
             # This code deals poorly with large reward values

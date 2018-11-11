@@ -15,7 +15,12 @@ from vec_env.subproc_vec_env import SubprocVecEnv
 
 def make_env(env_id, seed, rank, log_dir, start_container, discrete_wrapper=False):
     def _thunk():
-        env = gym.make(env_id)
+        env = DuckietownEnv(
+            map_name = env_id.strip().split('-')[1],
+            draw_curve = True,
+            draw_bbox = False,
+            full_transparency = True,
+        )
         if discrete_wrapper:
             env = DiscreteWrapper(env)
 
