@@ -1197,7 +1197,7 @@ class Simulator(gym.Env):
         misc = self.get_agent_info()
 
         # If the agent is not in a valid pose (on drivable tiles)
-        if not self._valid_pose(self.cur_pos, self.cur_angle):
+        if not self._valid_pose(self.cur_pos, self.cur_angle) or not self._drivable_pos(self.cur_pos):
             msg = 'Stopping the simulator because we are at an invalid pose.'
             misc['Simulator']['msg'] = msg
             #logger.info(msg)
