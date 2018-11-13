@@ -17,9 +17,9 @@ def make_env(env_id, seed, rank, log_dir, start_container, discrete_wrapper=Fals
     def _thunk():
         env = DuckietownEnv(
             map_name = env_id.strip().split('-')[1],
-            draw_curve = True,
+            draw_curve = False,
             draw_bbox = False,
-            full_transparency = True,
+            full_transparency = False,
         )
         if discrete_wrapper:
             env = DiscreteWrapper(env)

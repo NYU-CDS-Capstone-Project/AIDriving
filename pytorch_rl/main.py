@@ -36,6 +36,7 @@ def main():
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
     actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy)
     print_model_size(actor_critic)
+    print(obs_shape)
     if args.cuda: actor_critic.cuda()
 
     if args.algo == 'a2c':

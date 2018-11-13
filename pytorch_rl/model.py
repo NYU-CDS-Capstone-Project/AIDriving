@@ -36,7 +36,7 @@ class CNNPolicy(FFPolicy):
     def __init__(self, num_inputs, action_space, use_gru):
         super(CNNPolicy, self).__init__()
 
-        #print('num_inputs=%s' % str(num_inputs))
+        print('num_inputs=%s' % str(num_inputs))
 
         self.conv1 = nn.Conv2d(num_inputs, 32, 8, stride=2)
         self.conv1_drop = torch.nn.Dropout2d(p=0.2)
@@ -50,7 +50,7 @@ class CNNPolicy(FFPolicy):
         self.conv4 = nn.Conv2d(32, 32, 4, stride=1)
 
         self.linear1_drop = nn.Dropout(p=0.5)
-        self.linear1 = nn.Linear(32 * 74 * 54, 256)
+        self.linear1 = nn.Linear(32 * 9 * 14, 256)
 
         self.gruhdim = 256
         if use_gru:
@@ -112,7 +112,7 @@ class CNNPolicy(FFPolicy):
 
         x = self.conv4(x)
         x = F.leaky_relu(x)
-        x = x.view(-1, 32 * 74 * 54)
+        x = x.view(-1, 32 * 9 * 14)
         x = self.linear1_drop(x)
         x = self.linear1(x)
         x = F.leaky_relu(x)
