@@ -118,7 +118,7 @@ def main():
             recurrence_steps = 1
             if args.recurrent_policy: recurrence_steps = args.num_steps
 
-            indices = Variable(torch.arange(0, args.num_steps, recurrence_steps))
+            indices = torch.arange(0, args.num_steps, recurrence_steps).long()
             if args.cuda: indices = indices.cuda()
 
             total_value_loss = 0
