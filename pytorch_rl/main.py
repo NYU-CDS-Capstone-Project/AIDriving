@@ -114,21 +114,51 @@ def main():
 
         #Performing Actor Critic Updates
         if args.algo in ['a2c']:
-            values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(Variable(rollouts.observations[:-1].view(-1, *obs_shape)),
-                                                                                           Variable(rollouts.states[0].view(-1, actor_critic.state_size)),
-                                                                                           Variable(rollouts.masks[:-1].view(-1, 1)),
-                                                                                           Variable(rollouts.actions.view(-1, action_shape)))
 
-            values = values.view(args.num_steps, args.num_processes, 1)
-            action_log_probs = action_log_probs.view(args.num_steps, args.num_processes, 1)
+            recurrence_steps = 1
+            if args.recurrent_policy: recurrence_steps = args.num_steps
 
-            advantages = Variable(rollouts.returns[:-1]) - values
-            value_loss = advantages.pow(2).mean()
+            indices = Variable(torch.arange(0, args.num_steps, recurrence_steps))
+            if args.cuda: indices = indices.cuda()
 
-            action_loss = -(Variable(advantages.data) * action_log_probs).mean()
+            total_value_loss = 0
+            total_action_loss = 0
+            total_dist_entropy = 0
+            total_loss = 0
+
+            for rstep in range(recurrence_steps):
+
+                values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(
+                    Variable(rollouts.observations[:-1].index_select(0, indices).view(-1, *obs_shape)),
+                    Variable(rollouts.states[:-1].index_select(0, indices).view(-1, actor_critic.state_size)),
+                    Variable(rollouts.masks[:-1].index_select(0, indices).view(-1, 1)),
+                    Variable(rollouts.actions.index_select(0, indices).view(-1, action_shape))
+                )
+
+                values = values.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)
+                action_log_probs = action_log_probs.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)
+
+                advantages = Variable(rollouts.returns[:-1].index_select(0, indices)) - values
+                value_loss = advantages.pow(2).mean()
+
+                action_loss = -(Variable(advantages.data) * action_log_probs).mean()
+
+                loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef
+
+                total_value_loss += value_loss.data[0]
+                total_action_loss += action_loss.data[0]
+                total_dist_entropy += dist_entropy.data[0]
+                total_loss += loss
+
+                indices += 1
+
+            total_value_loss /= recurrence_steps
+            total_action_loss /= recurrence_steps
+            total_dist_entropy /= recurrence_steps
+            total_loss /= recurrence_steps
 
             optimizer.zero_grad()
-            (value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef).backward()
+            total_loss.backward()
 
             if args.algo == 'a2c':
                 nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
@@ -143,7 +173,7 @@ def main():
 
         #Logging the model
         if j % args.log_interval == 0:
-            logger.print_log(value_loss, action_loss, dist_entropy, args.num_processes, args.num_steps, j, start)
+            logger.print_log(total_value_loss, total_action_loss, total_dist_entropy, args.num_processes, args.num_steps, j, start)
 
 if __name__ == "__main__":
     main()

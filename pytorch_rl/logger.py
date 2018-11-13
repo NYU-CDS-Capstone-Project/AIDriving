@@ -69,9 +69,9 @@ class ModelLogger(object):
         self.length_avg = 0.99 * self.length_avg + 0.01 * self.final_lengths.mean()
         self.total_episode_rewards_avg.append(self.reward_avg)
         self.total_episode_lengths_avg.append(self.length_avg)
-        self.total_value_loss.append(value_loss.data[0])
-        self.total_action_loss.append(action_loss.data[0])
-        self.total_entropy.append(dist_entropy.data[0])
+        self.total_value_loss.append(value_loss)
+        self.total_action_loss.append(action_loss)
+        self.total_entropy.append(dist_entropy)
         end = time.time()
         total_num_steps = (nthupdate + 1) * num_processes * num_steps
 
@@ -83,8 +83,8 @@ class ModelLogger(object):
                 int(total_num_steps / (end - start)),
                 self.reward_avg,
                 self.length_avg,
-                dist_entropy.data[0],
-                value_loss.data[0],
-                action_loss.data[0]
+                dist_entropy,
+                value_loss,
+                action_loss
             )
         )
