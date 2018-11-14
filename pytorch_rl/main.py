@@ -30,7 +30,7 @@ def main():
 
     logger = ModelLogger(args.log_dir, args.num_processes)
 
-    envs = make_env_vec(args.num_processes, args.env_name, args.seed, args.log_dir, args.start_container, max_steps = 1200)
+    envs = make_env_vec(args.num_processes, args.env_name, args.seed, args.log_dir, args.start_container, max_steps = 1200, discrete_wrapper=args.discrete_actions)
 
     action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
