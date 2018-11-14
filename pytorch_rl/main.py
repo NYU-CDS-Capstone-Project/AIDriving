@@ -117,7 +117,7 @@ def main():
         if args.algo in ['a2c']:
 
             recurrence_steps = 1
-            if args.recurrent_policy: recurrence_steps = args.num_steps
+            if args.recurrent_policy: recurrence_steps = args.num_recsteps
 
             indices = torch.arange(0, args.num_steps, recurrence_steps).long()
             if args.cuda: indices = indices.cuda()

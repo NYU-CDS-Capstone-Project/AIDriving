@@ -55,6 +55,8 @@ def get_args():
                         help='disables CUDA training')
     parser.add_argument('--recurrent-policy', action='store_true', default=False,
                         help='use a recurrent policy')
+    parser.add_argument('--num-recsteps', type=int, default=5,
+                        help='number of recurrent steps in A2C (default: 5)')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,
