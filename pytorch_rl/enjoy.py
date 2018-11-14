@@ -25,10 +25,13 @@ parser.add_argument('--start-container', action='store_true', default=False,
                     help='start the Duckietown container image')
 parser.add_argument('--name', default='noname',
                     help='name of the model')
+parser.add_argument('--discrete-actions', action='store_true', default=False,
+                        help='use a discrete wrapper')
+
 
 args = parser.parse_args()
 
-env = make_env(args.env_name, args.seed, 0, None, args.start_container)
+env = make_env(args.env_name, args.seed, 0, None, args.start_container, args.discrete_actions)
 env = DummyVecEnv([env])
 
 actor_critic, ob_rms = torch.load(os.path.join(args.load_dir, args.env_name + "_" + args.name + ".pt"))
