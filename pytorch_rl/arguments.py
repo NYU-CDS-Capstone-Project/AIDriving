@@ -59,6 +59,8 @@ def get_args():
                         help='use a discrete wrapper')    
     parser.add_argument('--num-recsteps', type=int, default=5,
                         help='number of recurrent steps in A2C (default: 5)')
+    parser.add_argument('--continuous-var', type=float, default=1.0,
+                        help='variance of the continuous action (default: 1.0)')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,

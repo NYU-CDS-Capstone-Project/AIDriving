@@ -82,9 +82,9 @@ def main():
             #reward = np.clip(reward, a_min=0, a_max=None) / 400
 
             slack = 0.4
-            scaled_reward = np.clip(reward + slack, a_min = -8.0, a_max=None)
+            scaled_reward = np.clip(reward + slack, a_min = -4.0, a_max=None)
             for i in range(args.num_processes):
-            	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**3 - 1
+            	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**2 - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0

@@ -5,7 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from utils import AddBias
+from arguments import get_args
 
+args = get_args()
 
 class Categorical(nn.Module):
     def __init__(self, num_inputs, num_outputs):
@@ -55,7 +57,8 @@ class DiagGaussian(nn.Module):
         if x.is_cuda:
             zeros = zeros.cuda()
 
-        action_logstd = Variable(torch.zeros(self.num_outputs))
+        action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([args.continuous_var])))).repeat(self.num_outputs)
+        #action_logstd = Variable(torch.zeros(self.num_outputs))
         #action_logstd = self.logstd(zeros)
         if x.is_cuda:
             action_logstd = action_logstd.cuda()
