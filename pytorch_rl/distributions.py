@@ -116,7 +116,7 @@ class MixedDistribution(nn.Module):
 
         direction = self.linear(x)
 
-        action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([0.5])))).repeat(self.num_outputs)
+        action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([args.continuous_var])))).repeat(self.num_outputs)
 
         return direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd
 
@@ -126,8 +126,19 @@ class MixedDistribution(nn.Module):
         action_std = action_logstd.exp()
 
         direction_probs = F.softmax(direction, dim=1)
-        direction_max = torch.max(direction_probs, dim=1)[0].unsqueeze(-1)
-        direction_onehot = torch.eq(direction_probs, direction_max).unsqueeze(-1)
+        if deterministic is False:
+            discrete_action = direction_probs.multinomial(num_samples=1)
+        else:
+            discrete_action = direction_probs.max(1, keepdim=True)[1]
+
+        direction_onehot = torch.FloatTensor(discrete_action.size(0), discrete_action.size(1), 3).zero_()
+        direction_onehot.scatter_(2, discrete_action.unsqueeze(-1), 1)
+        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
+        if x.is_cuda:
+            direction_onehot = direction_onehot.cuda()
+
+        #direction_max = torch.max(direction_probs, dim=1)[0].unsqueeze(-1)
+        #direction_onehot = torch.eq(direction_probs, direction_max).unsqueeze(-1)
         #direction_indices = torch.argmax(direction_probs, dim=1)
 
         action_mean_left = torch.unsqueeze(action_mean_left, -1)
@@ -139,39 +150,54 @@ class MixedDistribution(nn.Module):
 
         action_mean = action_mean*direction_onehot.float()
         action_mean = action_mean.sum(dim=1)
+
 
         if deterministic is False:
             noise = Variable(torch.randn(action_std.size()))
             if action_std.is_cuda:
                 noise = noise.cuda()
-            action = action_mean + action_std * noise
+            continous_action = action_mean + action_std * noise
         else:
-            action = action_mean
+            continous_action = action_mean
 
-        return action
+        return [continous_action, discrete_action]
 
     def logprobs_and_entropy(self, x, actions):
+        continous_actions, discrete_actions = actions
+
         direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd = self(x)
         action_std = action_logstd.exp()
 
         direction_probs = F.softmax(direction, dim=1)
-        direction_max = torch.max(direction_probs, dim=1)[0].unsqueeze(-1)
-        direction_onehot = torch.eq(direction_probs, direction_max).unsqueeze(-1)
-        #direction_indices = torch.argmax(direction_probs, dim=1)
-
+        #direction_max, direction_argmax = torch.max(direction_probs, dim=1)
+        #direction_onehot = torch.eq(direction_probs, direction_max.unsqueeze(-1)).unsqueeze(-1)
+        direction_onehot = torch.FloatTensor(discrete_actions.size(0), discrete_actions.size(1), 3).zero_()
+        direction_onehot.scatter_(2, discrete_actions.unsqueeze(-1), 1)
+        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
+        if x.is_cuda:
+            direction_onehot = direction_onehot.cuda()
+        
+        #action_mask = (direction_argmax.reshape(-1) == discrete_actions.reshape(-1)).reshape(-1,1)
         action_mean_left = torch.unsqueeze(action_mean_left, -1)
         action_mean_right = torch.unsqueeze(action_mean_right, -1)
         action_mean_straight = torch.unsqueeze(action_mean_straight, -1)
 
         action_mean = torch.cat([action_mean_left, action_mean_right, action_mean_straight], dim=2).permute(0,2,1)
-        #action_mean = torch.index_select(action_mean, 2, direction_indices).squeeze(-1)
 
         action_mean = action_mean*direction_onehot.float()
         action_mean = action_mean.sum(dim=1)
 
-        action_log_probs = -0.5 * ((actions - action_mean) / action_std).pow(2) - 0.5 * math.log(2 * math.pi) - action_logstd
-        action_log_probs = action_log_probs.sum(-1, keepdim=True)
-        dist_entropy = 0.5 + 0.5 * math.log(2 * math.pi) + action_logstd
-        dist_entropy = dist_entropy.sum(-1).mean()
-        return action_log_probs, dist_entropy
+        continuous_action_log_probs = -0.5 * ((continous_actions - action_mean) / action_std).pow(2) - 0.5 * math.log(2 * math.pi) - action_logstd
+        continuous_action_log_probs = continuous_action_log_probs.sum(-1, keepdim=True)
+        continuous_dist_entropy = 0.5 + 0.5 * math.log(2 * math.pi) + action_logstd
+        continuous_dist_entropy = continuous_dist_entropy.sum(-1).mean()
+
+        #continuous_action_log_probs = continuous_action_log_probs*action_mask.float()
+        #continuous_dist_entropy = continuous_dist_entropy*action_mask.float()
+
+        direction_log_probs = F.log_softmax(direction, dim=1)
+        discrete_action_log_probs = direction_log_probs.gather(1, discrete_actions)
+        discrete_dist_entropy = -(direction_log_probs * direction_probs).sum(-1).mean()
+
+        return [continuous_action_log_probs, discrete_action_log_probs], [continuous_dist_entropy, discrete_dist_entropy]
 
