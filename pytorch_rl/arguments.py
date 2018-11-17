@@ -21,11 +21,11 @@ def get_args():
                         help='use generalized advantage estimation')
     parser.add_argument('--tau', type=float, default=0.95,
                         help='gae parameter (default: 0.95)')
-    parser.add_argument('--exp_probability', type=float, default=0.1,
+    parser.add_argument('--exp_probability', type=float, default=0.01,
                         help='probability for exploration (default: 0.1)')
     parser.add_argument('--entropy-coef', type=float, default=0.01,
                         help='entropy term coefficient (default: 0.01)')
-    parser.add_argument('--value-loss-coef', type=float, default=0.5,
+    parser.add_argument('--value-loss-coef', type=float, default=1.0,
                         help='value loss coefficient (default: 0.5)')
     parser.add_argument('--max-grad-norm', type=float, default=0.5,
                         help='value loss coefficient (default: 0.5)')
@@ -33,7 +33,7 @@ def get_args():
                         help='random seed (default: 1)')
     parser.add_argument('--num-processes', type=int, default=1,
                         help='how many training CPU processes to use')
-    parser.add_argument('--num-steps', type=int, default=5,
+    parser.add_argument('--num-steps', type=int, default=40,
                         help='number of forward steps in A2C (default: 5)')
     parser.add_argument('--num-stack', type=int, default=1,
                         help='number of frames to stack')
@@ -59,12 +59,12 @@ def get_args():
                         help='use a discrete wrapper')    
     parser.add_argument('--num-recsteps', type=int, default=5,
                         help='number of recurrent steps in A2C (default: 5)')
-    parser.add_argument('--continuous-var', type=float, default=1.0,
-                        help='variance of the continuous action (default: 1.0)')
+    parser.add_argument('--continuous-var', type=float, default=0.01,
+                        help='variance of the continuous action (default: 0.01)')
     parser.add_argument('--reward-pow', type=float, default=1.0,
                         help='power of reward (default: 1.0)')
-    parser.add_argument('--reward-slack', type=float, default=1.0,
-                        help='slack variable for reward (default: 1.0)')
+    parser.add_argument('--reward-slack', type=float, default=0.4,
+                        help='slack variable for reward (default: 0.4)')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,
