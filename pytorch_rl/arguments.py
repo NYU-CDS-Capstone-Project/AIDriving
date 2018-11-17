@@ -65,6 +65,8 @@ def get_args():
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,
                         help='start the Duckietown container image')
+    parser.add_argument('--use-mixed', action='store_true', default=False,
+                        help='use mixed distribution')
 
     args = parser.parse_args()
 

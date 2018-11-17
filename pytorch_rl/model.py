@@ -3,7 +3,7 @@ from functools import reduce
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from distributions import Categorical, DiagGaussian
+from distributions import Categorical, DiagGaussian, MixedDistribution
 from utils import orthogonal
 
 def weights_init(m):
@@ -33,7 +33,7 @@ class FFPolicy(nn.Module):
 
 
 class CNNPolicy(FFPolicy):
-    def __init__(self, num_inputs, action_space, use_gru):
+    def __init__(self, num_inputs, action_space, use_gru, distribution = 'DiagGaussian'):
         super(CNNPolicy, self).__init__()
 
         print('num_inputs=%s' % str(num_inputs))
@@ -63,7 +63,10 @@ class CNNPolicy(FFPolicy):
             self.dist = Categorical(256, num_outputs)
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(256, num_outputs)
+            if distribution == 'DiagGaussian':
+                self.dist = DiagGaussian(256, num_outputs)
+            elif distribution == 'MixedDistribution':
+                self.dist = MixedDistribution(256, num_outputs)
         else:
             raise NotImplementedError
 

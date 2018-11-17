@@ -34,7 +34,8 @@ def main():
 
     action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
-    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy)
+    distribution = 'MixedDistribution' if args.use_mixed else 'DiagGaussian'
+    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, distribution=distribution)
     print_model_size(actor_critic)
     print(obs_shape)
     if args.cuda: actor_critic.cuda()
@@ -84,7 +85,7 @@ def main():
             slack = 0.4
             scaled_reward = np.clip(reward + slack, a_min = -4.0, a_max=None)
             for i in range(args.num_processes):
-            	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**2 - 1
+                if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**2 - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
