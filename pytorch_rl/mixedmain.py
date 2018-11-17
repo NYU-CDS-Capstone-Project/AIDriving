@@ -147,7 +147,8 @@ def main():
                 advantages = Variable(rollouts.returns[:-1].index_select(0, indices)) - values
                 value_loss = advantages.pow(2).mean()
 
-                action_loss = -(Variable(advantages.data) * (continuous_action_log_probs + discrete_action_log_probs)).mean()
+                action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
+                    + (j%2 + 1)*discrete_action_log_probs)).mean()
 
                 #loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef
                 loss = value_loss * args.value_loss_coef + action_loss
