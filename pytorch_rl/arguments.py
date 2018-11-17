@@ -61,6 +61,10 @@ def get_args():
                         help='number of recurrent steps in A2C (default: 5)')
     parser.add_argument('--continuous-var', type=float, default=1.0,
                         help='variance of the continuous action (default: 1.0)')
+    parser.add_argument('--reward-pow', type=float, default=1.0,
+                        help='power of reward (default: 1.0)')
+    parser.add_argument('--reward-slack', type=float, default=1.0,
+                        help='slack variable for reward (default: 1.0)')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,
