@@ -117,6 +117,8 @@ class MixedDistribution(nn.Module):
         direction = self.linear(x)
 
         action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([args.continuous_var])))).repeat(self.num_outputs)
+        if x.is_cuda:
+            action_logstd = action_logstd.cuda()
 
         return direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd
 
@@ -131,11 +133,12 @@ class MixedDistribution(nn.Module):
         else:
             discrete_action = direction_probs.max(1, keepdim=True)[1]
 
-        direction_onehot = torch.FloatTensor(discrete_action.size(0), discrete_action.size(1), 3).zero_()
-        direction_onehot.scatter_(2, discrete_action.unsqueeze(-1), 1)
-        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
+        direction_onehot = Variable(torch.FloatTensor(discrete_action.size(0), discrete_action.size(1), 3).zero_())
         if x.is_cuda:
             direction_onehot = direction_onehot.cuda()
+
+        direction_onehot.scatter_(2, discrete_action.unsqueeze(-1).long(), 1)
+        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
 
         #direction_max = torch.max(direction_probs, dim=1)[0].unsqueeze(-1)
         #direction_onehot = torch.eq(direction_probs, direction_max).unsqueeze(-1)
@@ -171,11 +174,12 @@ class MixedDistribution(nn.Module):
         direction_probs = F.softmax(direction, dim=1)
         #direction_max, direction_argmax = torch.max(direction_probs, dim=1)
         #direction_onehot = torch.eq(direction_probs, direction_max.unsqueeze(-1)).unsqueeze(-1)
-        direction_onehot = torch.FloatTensor(discrete_actions.size(0), discrete_actions.size(1), 3).zero_()
-        direction_onehot.scatter_(2, discrete_actions.unsqueeze(-1), 1)
-        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
+        direction_onehot = Variable(torch.FloatTensor(discrete_actions.size(0), discrete_actions.size(1), 3).zero_())
         if x.is_cuda:
             direction_onehot = direction_onehot.cuda()
+
+        direction_onehot.scatter_(2, discrete_actions.unsqueeze(-1).long(), 1)
+        direction_onehot = direction_onehot.squeeze(1).unsqueeze(-1)
         
         #action_mask = (direction_argmax.reshape(-1) == discrete_actions.reshape(-1)).reshape(-1,1)
         action_mean_left = torch.unsqueeze(action_mean_left, -1)
