@@ -60,7 +60,7 @@ def get_args():
     parser.add_argument('--num-recsteps', type=int, default=5,
                         help='number of recurrent steps in A2C (default: 5)')
     parser.add_argument('--continuous-var', type=float, default=0.01,
-                        help='variance of the continuous action (default: 0.01)')
+                        help='variance of the continuous action (default: 0.16)')
     parser.add_argument('--reward-pow', type=float, default=1.0,
                         help='power of reward (default: 1.0)')
     parser.add_argument('--reward-slack', type=float, default=0.4,
