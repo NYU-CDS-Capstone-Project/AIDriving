@@ -81,13 +81,17 @@ def main():
                     envs.envs[i].user_tile_start = info[i]['Simulator']['tile_coords']
                     envs.envs[i].reset()
                     envs.envs[i].user_tile_start = None'''
-
             slack = args.reward_slack
             scaled_reward = np.clip(reward + slack, a_min = -2.0**args.reward_pow, a_max=None)
             for i in range(args.num_processes):
             	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**args.reward_pow - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
+            if step != 0:
+                cur_angle = continous_action[:, 1]
+                scaled_reward -= torch.abs(prev_angle - cur_angle).view(-1).data.cpu()/4
+            prev_angle = continous_action[:, 1]
+            
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
 
@@ -139,6 +143,7 @@ def main():
                     Variable(rollouts.discrete_actions.index_select(0, indices).view(-1, 1))]
                 )
 
+                continuous_dist_entropy, discrete_dist_entropy = dist_entropy
                 continuous_action_log_probs, discrete_action_log_probs = action_log_probs
                 values = values.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)
                 continuous_action_log_probs = continuous_action_log_probs.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)
@@ -147,14 +152,17 @@ def main():
                 advantages = Variable(rollouts.returns[:-1].index_select(0, indices)) - values
                 value_loss = advantages.pow(2).mean()
 
-                action_loss = -(Variable(advantages.data) * (0.2*continuous_action_log_probs + 0.8*discrete_action_log_probs)).mean()
+                '''action_loss = -(Variable(advantages.data) * (0.3*continuous_action_log_probs + 0.7*discrete_action_log_probs)).mean()'''
 
-                #loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef
-                loss = value_loss * args.value_loss_coef + action_loss
+                action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
+                     + ((j+1)%2)*discrete_action_log_probs)).mean()
+
+                loss = value_loss * args.value_loss_coef + action_loss - discrete_dist_entropy * args.entropy_coef
+                #loss = value_loss * args.value_loss_coef + action_loss
 
                 total_value_loss += value_loss.data[0]
                 total_action_loss += action_loss.data[0]
-                #total_dist_entropy += dist_entropy.data[0]
+                total_dist_entropy += discrete_dist_entropy.data[0]
                 total_loss += loss
 
                 indices += 1

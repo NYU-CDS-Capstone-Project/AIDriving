@@ -105,13 +105,13 @@ class MixedDistribution(nn.Module):
         action_mean_right = self.fc_mean_right(x)
         action_mean_straight = self.fc_mean_straight(x)
 
-        action_mean_left[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_left[:, 0]) / 2.5
-        action_mean_left[:, 1] = 0.4 + torch.nn.functional.sigmoid(action_mean_left[:, 1]) * 3/5
+        action_mean_left[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_left[:, 0]) * 2/5
+        action_mean_left[:, 1] = 0.6 + torch.nn.functional.sigmoid(action_mean_left[:, 1]) * 2/5
 
-        action_mean_right[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_right[:, 0]) / 2.5
-        action_mean_right[:, 1] = - 0.4 - torch.nn.functional.sigmoid(action_mean_right[:, 1]) * 3/5
+        action_mean_right[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_right[:, 0]) * 2/5
+        action_mean_right[:, 1] = - 0.6 - torch.nn.functional.sigmoid(action_mean_right[:, 1]) * 2/5
 
-        action_mean_straight[:, 0] = 0.6 + torch.nn.functional.sigmoid(action_mean_left[:, 0]) / 2.5
+        action_mean_straight[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean_straight[:, 0]) * 3/5
         action_mean_straight[:, 1] = torch.nn.functional.tanh(action_mean_straight[:, 1]) * 1/5
 
         direction = self.linear(x)
