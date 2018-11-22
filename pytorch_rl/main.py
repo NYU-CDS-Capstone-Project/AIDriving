@@ -35,7 +35,7 @@ def main():
     action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
     distribution = 'MixedDistribution' if args.use_mixed else 'DiagGaussian'
-    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, distribution=distribution)
+    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, args.use_batchnorm, args.use_residual, distribution=distribution)
     print_model_size(actor_critic)
     print(obs_shape)
     if args.cuda: actor_critic.cuda()
