@@ -119,7 +119,7 @@ class CNNPolicy(FFPolicy):
         x = self.linear1_drop(x)
         x = self.linear1(x)
         x = F.leaky_relu(x)
-
+ 
         if hasattr(self, 'gru'):
             if inputs.size(0) == states.size(0):
                 x = states = self.gru(x, states * masks)
@@ -131,7 +131,7 @@ class CNNPolicy(FFPolicy):
                     hx = states = self.gru(x[i], states * masks[i])
                     outputs.append(hx)
                 x = torch.cat(outputs, 0)
-
+        
         return self.critic_linear(x), x, states
 
 

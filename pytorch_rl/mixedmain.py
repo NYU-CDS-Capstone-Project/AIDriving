@@ -69,8 +69,8 @@ def main():
 
             cpu_actions = continous_action.data.squeeze(1).cpu().numpy()
             # Exploration epsilon greedy, ToDo better exploration policy
-            if np.random.random_sample() < args.exp_probability:
-                cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
+            #if np.random.random_sample() < args.exp_probability:
+                #cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
 
             # Observation, reward and next obs
             obs, reward, done, info = envs.step(cpu_actions)
@@ -83,13 +83,14 @@ def main():
                     envs.envs[i].user_tile_start = None'''
             slack = args.reward_slack
             scaled_reward = np.clip(reward + slack, a_min = -2.0**args.reward_pow, a_max=None)
+            #scaled_reward = np.clip(reward + slack, a_min = -40.0, a_max=None)
             for i in range(args.num_processes):
             	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**args.reward_pow - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
             if step != 0:
                 cur_angle = continous_action[:, 1]
-                scaled_reward -= torch.abs(prev_angle - cur_angle).view(-1).data.cpu()/4
+                scaled_reward -= (torch.abs(prev_angle - cur_angle).view(-1).data.cpu()**args.reward_facpow)*args.reward_factor
             prev_angle = continous_action[:, 1]
             
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
