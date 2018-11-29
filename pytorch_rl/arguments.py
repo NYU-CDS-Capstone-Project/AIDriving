@@ -75,6 +75,10 @@ def get_args():
                         help='start the Duckietown container image')
     parser.add_argument('--use-mixed', action='store_true', default=False,
                         help='use mixed distribution')
+    parser.add_argument('--use-batchnorm', action='store_true', default=False,
+                        help='whether or not use batchnorm in the CNN policy')
+    parser.add_argument('--use-residual', action='store_true', default=False,
+                        help='whether or not use residual block in the CNN policy')
 
     args = parser.parse_args()
 

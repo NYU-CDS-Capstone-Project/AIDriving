@@ -31,25 +31,48 @@ class FFPolicy(nn.Module):
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
         return value, action_log_probs, dist_entropy, states
 
+class CNNBlock(nn.Module):
+    def __init__(self, channels_in, channels_out, kernel_size, stride, use_batch_norm, use_residual):
+        super(CNNBlock, self).__init__()
+        self.use_batch_norm = use_batch_norm
+        self.use_residual = use_residual
+
+        self.conv = nn.Conv2d(channels_in, channels_out, kernel_size, stride=stride)
+        self.conv_drop = torch.nn.Dropout2d(p=0.2)
+        if use_batch_norm:
+            self.conv_bn = torch.nn.BatchNorm2d(channels_out)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.apply(weights_init)
+        relu_gain = nn.init.calculate_gain('leaky_relu')
+        self.conv.weight.data.mul_(relu_gain)
+
+    def forward(self, inputs):
+        x = self.conv(inputs)
+        #x = self.conv_drop(x)
+        if self.use_batch_norm:
+            x = self.conv_bn(x)
+        if self.use_residual:
+            x = x + inputs
+        x = F.leaky_relu(x)
+        return x
 
 class CNNPolicy(FFPolicy):
-    def __init__(self, num_inputs, action_space, use_gru, distribution = 'DiagGaussian'):
+    def __init__(self, num_inputs, action_space, use_gru, use_batch_norm=False, use_residual=False, distribution = 'DiagGaussian'):
         super(CNNPolicy, self).__init__()
 
         print('num_inputs=%s' % str(num_inputs))
 
-        self.conv1 = nn.Conv2d(num_inputs, 32, 8, stride=2)
-        self.conv1_drop = torch.nn.Dropout2d(p=0.2)
+        self.conv1 = CNNBlock(num_inputs, 32, 8, 2, use_batch_norm, False)
 
-        self.conv2 = nn.Conv2d(32, 32, 4, stride=2)
-        self.conv2_drop = torch.nn.Dropout2d(p=0.2)
+        self.conv2 = CNNBlock(32, 32, 4, 2, use_batch_norm, use_residual)
 
-        self.conv3 = nn.Conv2d(32, 32, 4, stride=2)
-        self.conv3_drop = torch.nn.Dropout2d(p=0.2)
+        self.conv3 = CNNBlock(32, 32, 4, 2, use_batch_norm, use_residual)
 
-        self.conv4 = nn.Conv2d(32, 32, 4, stride=1)
+        self.conv4 = CNNBlock(32, 32, 4, 1, use_batch_norm, use_residual)
 
-        self.linear1_drop = nn.Dropout(p=0.5)
+        self.linear1_drop = nn.Dropout(p=0.3)
         self.linear1 = nn.Linear(32 * 9 * 14, 256)
 
         self.gruhdim = 256
@@ -84,11 +107,6 @@ class CNNPolicy(FFPolicy):
         self.apply(weights_init)
 
         relu_gain = nn.init.calculate_gain('leaky_relu')
-        tanh_gain = nn.init.calculate_gain('tanh')
-        self.conv1.weight.data.mul_(relu_gain)
-        self.conv2.weight.data.mul_(relu_gain)
-        self.conv3.weight.data.mul_(relu_gain)
-        self.conv4.weight.data.mul_(relu_gain)
         self.linear1.weight.data.mul_(relu_gain)
 
         if hasattr(self, 'gru'):
@@ -102,24 +120,20 @@ class CNNPolicy(FFPolicy):
 
     def forward(self, inputs, states, masks):
         x = self.conv1(inputs)
-        #x = self.conv1_drop(x)
-        x = F.leaky_relu(x)
 
         x = self.conv2(x)
-        #x = self.conv2_drop(x)
-        x = F.leaky_relu(x)
 
         x = self.conv3(x)
-        #x = self.conv3_drop(x)
-        x = F.leaky_relu(x)
 
         x = self.conv4(x)
-        x = F.leaky_relu(x)
+
         x = x.view(-1, 32 * 9 * 14)
         x = self.linear1_drop(x)
         x = self.linear1(x)
         x = F.leaky_relu(x)
  
+        out = x
+
         if hasattr(self, 'gru'):
             if inputs.size(0) == states.size(0):
                 x = states = self.gru(x, states * masks)
@@ -131,8 +145,8 @@ class CNNPolicy(FFPolicy):
                     hx = states = self.gru(x[i], states * masks[i])
                     outputs.append(hx)
                 x = torch.cat(outputs, 0)
-        
-        return self.critic_linear(x), x, states
+            out = out + x
+        return self.critic_linear(out), out, states
 
 
 def weights_init_mlp(m):
