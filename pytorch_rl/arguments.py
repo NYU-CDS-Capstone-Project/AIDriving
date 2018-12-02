@@ -65,6 +65,10 @@ def get_args():
                         help='power of reward (default: 1.0)')
     parser.add_argument('--reward-slack', type=float, default=0.4,
                         help='slack variable for reward (default: 0.4)')
+    parser.add_argument('--reward-factor', type=float, default=0.1,
+                        help='factor variable for reward (default: 0.1)')
+    parser.add_argument('--reward-facpow', type=float, default=1.0,
+                        help='factor variable for reward power (default: 1)')
     parser.add_argument('--no-vis', action='store_true', default=False,
                         help='disables visdom visualization')
     parser.add_argument('--start-container', action='store_true', default=False,

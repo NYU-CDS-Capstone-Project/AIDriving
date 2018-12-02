@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -105,18 +106,18 @@ class MixedDistribution(nn.Module):
         action_mean_right = self.fc_mean_right(x)
         action_mean_straight = self.fc_mean_straight(x)
 
-        action_mean_left[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_left[:, 0]) * 2/5
+        action_mean_left[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean_left[:, 0]) * 2/5
         action_mean_left[:, 1] = 0.6 + torch.nn.functional.sigmoid(action_mean_left[:, 1]) * 2/5
 
-        action_mean_right[:, 0] = 0.2 + torch.nn.functional.sigmoid(action_mean_right[:, 0]) * 2/5
+        action_mean_right[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean_right[:, 0]) * 2/5
         action_mean_right[:, 1] = - 0.6 - torch.nn.functional.sigmoid(action_mean_right[:, 1]) * 2/5
 
-        action_mean_straight[:, 0] = 0.4 + torch.nn.functional.sigmoid(action_mean_straight[:, 0]) * 3/5
-        action_mean_straight[:, 1] = torch.nn.functional.tanh(action_mean_straight[:, 1]) * 1/5
+        action_mean_straight[:, 0] = 0.7 + torch.nn.functional.sigmoid(action_mean_straight[:, 0]) * 3/10
+        action_mean_straight[:, 1] = torch.nn.functional.tanh(action_mean_straight[:, 1]) * 1/2000
 
         direction = self.linear(x)
 
-        action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([args.continuous_var])))).repeat(self.num_outputs)
+        action_logstd = Variable(torch.log(torch.sqrt(torch.Tensor([args.continuous_var for _ in range(self.num_outputs)]))))
         if x.is_cuda:
             action_logstd = action_logstd.cuda()
 
@@ -126,6 +127,11 @@ class MixedDistribution(nn.Module):
 
         direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd = self(x)
         action_std = action_logstd.exp()
+
+        if np.random.random_sample() < args.exp_probability:
+            direction = Variable(torch.randn(direction.shape))
+            if x.is_cuda:
+                direction = direction.cuda()
 
         direction_probs = F.softmax(direction, dim=1)
         if deterministic is False:
@@ -154,6 +160,8 @@ class MixedDistribution(nn.Module):
         action_mean = action_mean*direction_onehot.float()
         action_mean = action_mean.sum(dim=1)
 
+        if (discrete_action.long() == 2).any():
+           action_std[1].data == 0.01
 
         if deterministic is False:
             noise = Variable(torch.randn(action_std.size()))

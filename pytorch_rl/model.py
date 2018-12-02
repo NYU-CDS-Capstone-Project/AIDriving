@@ -131,6 +131,7 @@ class CNNPolicy(FFPolicy):
         x = self.linear1_drop(x)
         x = self.linear1(x)
         x = F.leaky_relu(x)
+ 
         out = x
 
         if hasattr(self, 'gru'):
