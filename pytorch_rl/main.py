@@ -88,6 +88,13 @@ def main():
             	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**args.reward_pow - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
+
+            if step != 0:
+                cur_angle = action[:, 1]
+                scaled_reward -= torch.abs(prev_angle - cur_angle).view(-1).data.cpu()*args.reward_factor
+            prev_angle = action[:, 1]
+
+
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
 
