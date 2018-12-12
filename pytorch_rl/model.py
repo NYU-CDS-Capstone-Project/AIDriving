@@ -23,13 +23,15 @@ class FFPolicy(nn.Module):
         raise NotImplementedError
 
     def act(self, inputs, states, masks, deterministic=False):
-        value, x, states, _, _, _ = self(inputs, states, masks)
+        value, x, states, _, _, _, epsilons = self(inputs, states, masks)
         action = self.dist.sample(x, deterministic=deterministic)
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, action)
-        return value, action, action_log_probs, states
+        return value, action, action_log_probs, states, epsilons
 
-    def evaluate_actions(self, inputs, states, masks, actions):
-        value, x, states, reconstruction, mu, logvar = self(inputs, states, masks)
+    def evaluate_actions(self, inputs, states, masks, actions, epsilons):
+        print(epsilons)
+        value, x, states, reconstruction, mu, logvar, epsilons = self(inputs, states, masks, epsilons)
+        print(epsilons)
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
         reconstruction_loss, kl_divergence = 0.0, 0.0
         if self.use_vae:
@@ -150,6 +152,13 @@ class CNNPolicy(FFPolicy):
         else:
             return 1
 
+    @property
+    def epsilon_size(self):
+        if self.use_vae:
+            return 256
+        else:
+            return 1
+
     def reset_parameters(self):
         self.apply(weights_init)
 
@@ -167,17 +176,18 @@ class CNNPolicy(FFPolicy):
 
 
     #scoure: https://github.com/coolvision/vae_conv/blob/master/vae_conv_model_mnist.py
-    def reparametrize(self, mu, logvar):
+    def reparametrize(self, mu, logvar, eps = None):
         std = logvar.mul(0.5).exp_()
-        if torch.cuda.is_available():
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
-        else:
-            eps = torch.FloatTensor(std.size()).normal_()
-        eps = Variable(eps)
-        return eps.mul(std).add_(mu)
+        if eps is None:
+            if torch.cuda.is_available():
+                eps = torch.cuda.FloatTensor(std.size()).normal_()
+            else:
+                eps = torch.FloatTensor(std.size()).normal_()
+            eps = Variable(eps)
+        return eps.mul(std).add_(mu), eps
 
 
-    def forward(self, inputs, states, masks):
+    def forward(self, inputs, states, masks, epsilons=None):
 
         x = self.conv1(inputs)
         x = self.conv2(x)
@@ -196,7 +206,7 @@ class CNNPolicy(FFPolicy):
         if self.use_vae:
             z_mean = self.linearmean(x)
             z_logvar = self.linearvar(x)
-            z = self.reparametrize(z_mean, z_logvar)
+            z, epsilons = self.reparametrize(z_mean, z_logvar, epsilons)
 
             unx = F.relu(self.unlinearlatent(z))
             unx = F.relu(self.unlinear1(unx))
@@ -223,7 +233,12 @@ class CNNPolicy(FFPolicy):
                 x = torch.cat(outputs, 0)
             out = out + x
 
-        return self.critic_linear(out), out, states, reconstruction, z_mean, z_logvar
+        #Bad way of doing it
+        if not self.use_vae and epsilons == None:
+            epsilons = torch.FloatTensor([0.0])
+            if torch.cuda.is_available(): epsilons = epsilons.cuda()
+            
+        return self.critic_linear(out), out, states, reconstruction, z_mean, z_logvar, epsilons
 
 
     #source https://github.com/coolvision/vae_conv/blob/master/vae_conv_mnist.py
