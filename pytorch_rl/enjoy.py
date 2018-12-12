@@ -66,9 +66,10 @@ def on_key_press(symbol, modifiers):
     return
 
 try:
-    env.envs[0].unwrapped.max_steps = 800
+    env.envs[0].unwrapped.max_steps = 1200
     actions = []
     rewards = []
+    values = []
     step = 0
     while True:
         value, action, _, states = actor_critic.act(
@@ -78,23 +79,32 @@ try:
             deterministic=True
         )
         states = states.data
-        cpu_actions = action.data.squeeze(1).cpu().numpy()
+        cpu_actions = action[0].data.squeeze(1).cpu().numpy()
 
+        #print(value)
         # Obser reward and next obs
         obs, reward, done, info = env.step(cpu_actions)
         time.sleep(1 / env.envs[0].unwrapped.frame_rate)
 
+        values.append(value)
         actions.append(cpu_actions)
         rewards.append(reward)
         step = step + 1
 
         if reward == -1000 or step == env.envs[0].unwrapped.max_steps-1:
-            print([a[0] for a in actions])
+            step = 0
             print([r[0] for r in rewards])
+            velocities = [a[0][0] for a in actions]
+            angles = [a[0][1] for a in actions]
+            np.save('velocities.npy', np.asarray(velocities))
+            np.save('angles.npy', np.asarray(angles))
+            np.save('values.npy', np.asarray(values))
+            print(velocities)
+            print(angles)
             actions = []
             rewards = []
-            step = 0
-            print("#############")    
+            values = []
+            print("#############")
 
         masks.fill_(0.0 if done else 1.0)
 

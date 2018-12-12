@@ -68,9 +68,6 @@ def main():
             continous_action_log_prob, discrete_action_log_prob = action_log_prob
 
             cpu_actions = continous_action.data.squeeze(1).cpu().numpy()
-            # Exploration epsilon greedy, ToDo better exploration policy
-            if np.random.random_sample() < args.exp_probability:
-                cpu_actions = [envs.action_space.sample() for _ in range(args.num_processes)]
 
             # Observation, reward and next obs
             obs, reward, done, info = envs.step(cpu_actions)
@@ -152,24 +149,26 @@ def main():
                 advantages = Variable(rollouts.returns[:-1].index_select(0, indices)) - values
                 value_loss = advantages.pow(2).mean()
 
+                action_loss = -(Variable(advantages.data) * continuous_action_log_probs).mean()
+
                 '''action_loss = -(Variable(advantages.data) * (0.3*continuous_action_log_probs + 0.7*discrete_action_log_probs)).mean()'''
 
-                action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
-                     + ((j+1)%2)*discrete_action_log_probs)).mean()
+                '''action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
+                     + ((j+1)%2)*discrete_action_log_probs)).mean()'''
 
-                loss = value_loss * args.value_loss_coef + action_loss - discrete_dist_entropy * args.entropy_coef
-                #loss = value_loss * args.value_loss_coef + action_loss
+                #loss = value_loss * args.value_loss_coef + action_loss - discrete_dist_entropy * args.entropy_coef
+                loss = value_loss * args.value_loss_coef + action_loss
 
                 total_value_loss += value_loss.data[0]
                 total_action_loss += action_loss.data[0]
-                total_dist_entropy += discrete_dist_entropy.data[0]
+                #total_dist_entropy += discrete_dist_entropy.data[0]
                 total_loss += loss
 
                 indices += 1
 
             total_value_loss /= recurrence_steps
             total_action_loss /= recurrence_steps
-            total_dist_entropy /= recurrence_steps
+            #total_dist_entropy /= recurrence_steps
             total_loss /= recurrence_steps
 
             optimizer.zero_grad()
