@@ -57,9 +57,9 @@ def get_args():
                         help='use a recurrent policy')
     parser.add_argument('--discrete-actions', action='store_true', default=False,
                         help='use a discrete wrapper')    
-    parser.add_argument('--num-recsteps', type=int, default=5,
+    parser.add_argument('--num-recsteps', type=int, default=20,
                         help='number of recurrent steps in A2C (default: 5)')
-    parser.add_argument('--continuous-var', type=float, default=0.01,
+    parser.add_argument('--continuous-var', type=float, default=0.16,
                         help='variance of the continuous action (default: 0.16)')
     parser.add_argument('--reward-pow', type=float, default=1.0,
                         help='power of reward (default: 1.0)')
