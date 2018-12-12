@@ -29,9 +29,7 @@ class FFPolicy(nn.Module):
         return value, action, action_log_probs, states, epsilons
 
     def evaluate_actions(self, inputs, states, masks, actions, epsilons):
-        print(epsilons)
         value, x, states, reconstruction, mu, logvar, epsilons = self(inputs, states, masks, epsilons)
-        print(epsilons)
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
         reconstruction_loss, kl_divergence = 0.0, 0.0
         if self.use_vae:
