@@ -173,7 +173,7 @@ class MixedDistribution(nn.Module):
 
         return [continous_action, discrete_action]
 
-    def logprobs_and_entropy(self, x, actions):
+    '''def logprobs_and_entropy(self, x, actions):
         continous_actions, discrete_actions = actions
 
         direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd = self(x)
@@ -211,5 +211,34 @@ class MixedDistribution(nn.Module):
         discrete_action_log_probs = direction_log_probs.gather(1, discrete_actions)
         discrete_dist_entropy = -(direction_log_probs * direction_probs).sum(-1).mean()
 
-        return [continuous_action_log_probs, discrete_action_log_probs], [continuous_dist_entropy, discrete_dist_entropy]
+        return [continuous_action_log_probs, discrete_action_log_probs], [continuous_dist_entropy, discrete_dist_entropy]'''
+
+    def logprobs_and_entropy(self, x, actions):
+        continous_actions, discrete_actions = actions
+
+        direction, action_mean_left, action_mean_right, action_mean_straight, action_logstd = self(x)
+        action_std = action_logstd.exp()
+
+        direction_probs = F.softmax(direction, dim=1)
+
+        action_mean_left_probs = (1/(torch.sqrt(2*math.pi*action_std.pow(2))))*torch.exp(-0.5 * ((continous_actions - action_mean_left) / action_std).pow(2))
+        action_mean_right_probs = (1/(torch.sqrt(2*math.pi*action_std.pow(2))))*torch.exp(-0.5 * ((continous_actions - action_mean_right) / action_std).pow(2))
+        action_mean_straight_probs = (1/(torch.sqrt(2*math.pi*action_std.pow(2))))*torch.exp(-0.5 * ((continous_actions - action_mean_straight) / action_std).pow(2))
+
+        action_mean_probs = torch.stack([action_mean_left_probs, action_mean_right_probs, action_mean_straight_probs]).permute(1, 0, 2)
+
+        direction_probs = direction_probs.unsqueeze(1)
+        continuous_mixed_probs = torch.bmm(direction_probs, action_mean_probs)
+
+        continuous_mixed_probs = torch.log(continuous_mixed_probs)
+
+        direction_log_probs = F.log_softmax(direction, dim=1)
+        discrete_action_log_probs = direction_log_probs.gather(1, discrete_actions)
+
+        continuous_dist_entropy = None
+        discrete_dist_entropy = None
+
+        continuous_mixed_probs = continuous_mixed_probs.squeeze(1).sum(-1, keepdim=True)
+        return [continuous_mixed_probs, discrete_action_log_probs], [continuous_dist_entropy, discrete_dist_entropy]
+
 

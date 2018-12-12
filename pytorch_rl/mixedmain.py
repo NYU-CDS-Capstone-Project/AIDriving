@@ -88,10 +88,10 @@ def main():
             	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**args.reward_pow - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
-            if step != 0:
+            '''if step != 0:
                 cur_angle = continous_action[:, 1]
                 scaled_reward -= (torch.abs(prev_angle - cur_angle).view(-1).data.cpu()**args.reward_facpow)*args.reward_factor
-            prev_angle = continous_action[:, 1]
+            prev_angle = continous_action[:, 1]'''
             
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
@@ -155,22 +155,24 @@ def main():
 
                 '''action_loss = -(Variable(advantages.data) * (0.3*continuous_action_log_probs + 0.7*discrete_action_log_probs)).mean()'''
 
-                action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
-                     + ((j+1)%2)*discrete_action_log_probs)).mean()
+                '''action_loss = -(Variable(advantages.data) * ((j%2)*continuous_action_log_probs 
+                     + ((j+1)%2)*discrete_action_log_probs)).mean()'''
 
-                loss = value_loss * args.value_loss_coef + action_loss - discrete_dist_entropy * args.entropy_coef
-                #loss = value_loss * args.value_loss_coef + action_loss
+                action_loss = -(Variable(advantages.data) * continuous_action_log_probs).mean()
+
+                #loss = value_loss * args.value_loss_coef + action_loss - discrete_dist_entropy * args.entropy_coef
+                loss = value_loss * args.value_loss_coef + action_loss
 
                 total_value_loss += value_loss.data[0]
                 total_action_loss += action_loss.data[0]
-                total_dist_entropy += discrete_dist_entropy.data[0]
+                #total_dist_entropy += discrete_dist_entropy.data[0]
                 total_loss += loss
 
                 indices += 1
 
             total_value_loss /= recurrence_steps
             total_action_loss /= recurrence_steps
-            total_dist_entropy /= recurrence_steps
+            #total_dist_entropy /= recurrence_steps
             total_loss /= recurrence_steps
 
             optimizer.zero_grad()
