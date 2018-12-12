@@ -44,7 +44,7 @@ def main():
     if args.algo == 'a2c':
         optimizer = optim.RMSprop(actor_critic.parameters(), args.lr, eps=args.eps, alpha=args.alpha)
 
-    rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape, envs.action_space, actor_critic.state_size)
+    rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape, envs.action_space, actor_critic.state_size, actor_critic.epsilon_size)
     current_obs = torch.zeros(args.num_processes, *obs_shape)
     obs = envs.reset()
     current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
@@ -59,7 +59,7 @@ def main():
         #Running an episode
         for step in range(args.num_steps):
             # Sample actions
-            value, action, action_log_prob, states = actor_critic.act(
+            value, action, action_log_prob, states, epsilons = actor_critic.act(
                 Variable(rollouts.observations[step]),
                 Variable(rollouts.states[step]),
                 Variable(rollouts.masks[step])
@@ -112,7 +112,7 @@ def main():
                 current_obs *= masks
 
             current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
-            rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, scaled_reward, masks)
+            rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, scaled_reward, masks, epsilons.data)
 
         next_value = actor_critic(
             Variable(rollouts.observations[-1]),
@@ -144,7 +144,8 @@ def main():
                     Variable(rollouts.observations[:-1].index_select(0, indices).view(-1, *obs_shape)),
                     Variable(rollouts.states[:-1].index_select(0, indices).view(-1, actor_critic.state_size)),
                     Variable(rollouts.masks[:-1].index_select(0, indices).view(-1, 1)),
-                    Variable(rollouts.actions.index_select(0, indices).view(-1, action_shape))
+                    Variable(rollouts.actions.index_select(0, indices).view(-1, action_shape)),
+                    Variable(rollouts.epsilons.index_select(0, indices).view(-1, actor_critic.epsilon_size)) if args.use_vae else None
                 )
 
                 values = values.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)

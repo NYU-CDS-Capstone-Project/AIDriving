@@ -84,7 +84,7 @@ class ModelLogger(object):
         total_num_steps = (nthupdate + 1) * num_processes * num_steps
 
         print(
-            "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, recon loss {:.5f}, kld loss {:.5f}".
+            "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:2.5f}, value loss {:2.5f}, policy loss {:2.5f}, recon loss {:6f}, kld loss {:2f}".
             format(
                 nthupdate,
                 total_num_steps,
