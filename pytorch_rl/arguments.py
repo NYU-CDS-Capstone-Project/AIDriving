@@ -21,8 +21,8 @@ def get_args():
                         help='use generalized advantage estimation')
     parser.add_argument('--tau', type=float, default=0.95,
                         help='gae parameter (default: 0.95)')
-    parser.add_argument('--exp_probability', type=float, default=0.01,
-                        help='probability for exploration (default: 0.1)')
+    parser.add_argument('--exp_probability', type=float, default=0.0,
+                        help='probability for exploration (default: 0.0)')
     parser.add_argument('--entropy-coef', type=float, default=0.01,
                         help='entropy term coefficient (default: 0.01)')
     parser.add_argument('--value-loss-coef', type=float, default=1.0,
@@ -65,8 +65,8 @@ def get_args():
                         help='power of reward (default: 1.0)')
     parser.add_argument('--reward-slack', type=float, default=0.4,
                         help='slack variable for reward (default: 0.4)')
-    parser.add_argument('--reward-factor', type=float, default=0.1,
-                        help='factor variable for reward (default: 0.1)')
+    parser.add_argument('--reward-factor', type=float, default=0.0,
+                        help='factor variable for reward (default: 0.0)')
     parser.add_argument('--reward-facpow', type=float, default=1.0,
                         help='factor variable for reward power (default: 1)')
     parser.add_argument('--no-vis', action='store_true', default=False,
