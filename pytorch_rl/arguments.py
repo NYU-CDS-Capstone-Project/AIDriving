@@ -79,6 +79,9 @@ def get_args():
                         help='whether or not use batchnorm in the CNN policy')
     parser.add_argument('--use-residual', action='store_true', default=False,
                         help='whether or not use residual block in the CNN policy')
+    parser.add_argument('--use-vae', action='store_true', default=False,
+                        help='whether or not use VAE')
+
 
     args = parser.parse_args()
 

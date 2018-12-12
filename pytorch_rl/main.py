@@ -35,7 +35,8 @@ def main():
     action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
     distribution = 'MixedDistribution' if args.use_mixed else 'DiagGaussian'
-    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, args.use_batchnorm, args.use_residual, distribution=distribution)
+    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, args.use_vae, 
+        args.use_batchnorm, args.use_residual, distribution=distribution)
     print_model_size(actor_critic)
     print(obs_shape)
     if args.cuda: actor_critic.cuda()
@@ -134,10 +135,12 @@ def main():
             total_action_loss = 0
             total_dist_entropy = 0
             total_loss = 0
+            total_recon_loss = 0
+            total_kdl_loss = 0
 
             for rstep in range(recurrence_steps):
 
-                values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(
+                values, action_log_probs, dist_entropy, states, recon_loss, kld = actor_critic.evaluate_actions(
                     Variable(rollouts.observations[:-1].index_select(0, indices).view(-1, *obs_shape)),
                     Variable(rollouts.states[:-1].index_select(0, indices).view(-1, actor_critic.state_size)),
                     Variable(rollouts.masks[:-1].index_select(0, indices).view(-1, 1)),
@@ -152,11 +155,14 @@ def main():
 
                 action_loss = -(Variable(advantages.data) * action_log_probs).mean()
 
-                loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef
+                loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef + recon_loss + kld
 
                 total_value_loss += value_loss.data[0]
                 total_action_loss += action_loss.data[0]
                 total_dist_entropy += dist_entropy.data[0]
+                if args.use_vae:
+                    total_recon_loss += recon_loss.data[0]
+                    total_kdl_loss += kld.data[0]
                 total_loss += loss
 
                 indices += 1
@@ -164,6 +170,8 @@ def main():
             total_value_loss /= recurrence_steps
             total_action_loss /= recurrence_steps
             total_dist_entropy /= recurrence_steps
+            total_recon_loss /= recurrence_steps
+            total_kdl_loss /= recurrence_steps
             total_loss /= recurrence_steps
 
             optimizer.zero_grad()
@@ -182,7 +190,8 @@ def main():
 
         #Logging the model
         if j % args.log_interval == 0:
-            logger.print_log(total_value_loss, total_action_loss, total_dist_entropy, args.num_processes, args.num_steps, j, start)
+            logger.print_log(total_value_loss, total_action_loss, total_dist_entropy, total_recon_loss, total_kdl_loss, 
+                args.num_processes, args.num_steps, j, start)
 
 if __name__ == "__main__":
     main()

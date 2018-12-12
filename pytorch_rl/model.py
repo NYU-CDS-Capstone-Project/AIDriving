@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from distributions import Categorical, DiagGaussian, MixedDistribution
 from utils import orthogonal
+from torch.autograd import Variable
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -12,6 +13,7 @@ def weights_init(m):
         orthogonal(m.weight.data)
         if m.bias is not None:
             m.bias.data.fill_(0)
+
 
 class FFPolicy(nn.Module):
     def __init__(self):
@@ -21,23 +23,27 @@ class FFPolicy(nn.Module):
         raise NotImplementedError
 
     def act(self, inputs, states, masks, deterministic=False):
-        value, x, states = self(inputs, states, masks)
+        value, x, states, _, _, _ = self(inputs, states, masks)
         action = self.dist.sample(x, deterministic=deterministic)
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, action)
         return value, action, action_log_probs, states
 
     def evaluate_actions(self, inputs, states, masks, actions):
-        value, x, states = self(inputs, states, masks)
+        value, x, states, reconstruction, mu, logvar = self(inputs, states, masks)
         action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
-        return value, action_log_probs, dist_entropy, states
+        reconstruction_loss, kl_divergence = 0.0, 0.0
+        if self.use_vae:
+            reconstruction_loss, kl_divergence = self.compute_vae_loss(inputs, reconstruction, mu, logvar)
+        return value, action_log_probs, dist_entropy, states, reconstruction_loss, kl_divergence
+
 
 class CNNBlock(nn.Module):
-    def __init__(self, channels_in, channels_out, kernel_size, stride, use_batch_norm, use_residual):
+    def __init__(self, channels_in, channels_out, kernel_size, stride, padding, use_batch_norm, use_residual):
         super(CNNBlock, self).__init__()
         self.use_batch_norm = use_batch_norm
         self.use_residual = use_residual
 
-        self.conv = nn.Conv2d(channels_in, channels_out, kernel_size, stride=stride)
+        self.conv = nn.Conv2d(channels_in, channels_out, kernel_size, stride=stride, padding=padding)
         self.conv_drop = torch.nn.Dropout2d(p=0.2)
         if use_batch_norm:
             self.conv_bn = torch.nn.BatchNorm2d(channels_out)
@@ -58,26 +64,67 @@ class CNNBlock(nn.Module):
         x = F.leaky_relu(x)
         return x
 
-class CNNPolicy(FFPolicy):
-    def __init__(self, num_inputs, action_space, use_gru, use_batch_norm=False, use_residual=False, distribution = 'DiagGaussian'):
-        super(CNNPolicy, self).__init__()
+class CNNUnBlock(nn.Module):
+    def __init__(self, channels_in, channels_out, kernel_size, stride, padding, outpadding, use_batch_norm, use_residual):
+        super(CNNUnBlock, self).__init__()
+        self.use_batch_norm = use_batch_norm
+        self.use_residual = use_residual
 
+        self.unconv = nn.ConvTranspose2d(channels_out, channels_in, kernel_size, stride=stride, padding=padding, output_padding=outpadding)
+        self.unconv_drop = torch.nn.Dropout2d(p=0.2)
+        if use_batch_norm:
+            self.unconv_bn = torch.nn.BatchNorm2d(channels_in)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.apply(weights_init)
+        relu_gain = nn.init.calculate_gain('leaky_relu')
+        self.unconv.weight.data.mul_(relu_gain)
+
+    def forward(self, inputs, last=False):
+        x = self.unconv(inputs)
+        #x = self.conv_drop(x)
+        if self.use_batch_norm and not last:
+            x = self.unconv_bn(x)
+        if self.use_residual and not last:
+            x = x + inputs
+        if last: x = F.sigmoid(x)
+        else: x = F.relu(x)
+        return x
+
+
+class CNNPolicy(FFPolicy):
+    def __init__(self, num_inputs, action_space, use_gru, use_vae, 
+        use_batch_norm=False, use_residual=False, distribution = 'DiagGaussian'):
+
+        super(CNNPolicy, self).__init__()
         print('num_inputs=%s' % str(num_inputs))
 
-        self.conv1 = CNNBlock(num_inputs, 32, 8, 2, use_batch_norm, False)
-
-        self.conv2 = CNNBlock(32, 32, 4, 2, use_batch_norm, use_residual)
-
-        self.conv3 = CNNBlock(32, 32, 4, 2, use_batch_norm, use_residual)
-
-        self.conv4 = CNNBlock(32, 32, 4, 1, use_batch_norm, use_residual)
+        self.conv1 = CNNBlock(num_inputs, 32, 7, 2, 3, use_batch_norm, False)
+        self.conv2 = CNNBlock(32, 32, 3, 2, 1, use_batch_norm, use_residual)
+        self.conv3 = CNNBlock(32, 32, 3, 2, 1, use_batch_norm, use_residual)
+        self.conv4 = CNNBlock(32, 32, 3, 2, 1, use_batch_norm, use_residual)
+        self.conv5 = CNNBlock(32, 32, 3, 1, 1, use_batch_norm, use_residual)
 
         self.linear1_drop = nn.Dropout(p=0.3)
-        self.linear1 = nn.Linear(32 * 9 * 14, 256)
+        self.linear1 = nn.Linear(32 * 10 * 8, 256)
 
         self.gruhdim = 256
         if use_gru:
             self.gru = nn.GRUCell(self.gruhdim, self.gruhdim)
+
+        self.use_vae = use_vae
+        if use_vae:
+            self.linearmean = nn.Linear(256, 256)
+            self.linearvar = nn.Linear(256, 256)
+            self.unlinearlatent = nn.Linear(256, 256)
+            self.unlinear1 = nn.Linear(256, 32 * 10 * 8)
+
+            self.unconv5 = CNNUnBlock(32, 32, 3, 1, 1, 0, use_batch_norm, use_residual)
+            self.unconv4 = CNNUnBlock(32, 32, 3, 2, (1,1), (1,0), use_batch_norm, use_residual)
+            self.unconv3 = CNNUnBlock(32, 32, 3, 2, 1, 1, use_batch_norm, use_residual)
+            self.unconv2 = CNNUnBlock(32, 32, 3, 2, 1, 1, use_batch_norm, use_residual)
+            self.unconv1 = CNNUnBlock(num_inputs, 32, 7, 2, 3, 1, False, False)
 
         self.critic_linear = nn.Linear(256, 1)
 
@@ -118,21 +165,50 @@ class CNNPolicy(FFPolicy):
         if self.dist.__class__.__name__ == "DiagGaussian":
             self.dist.fc_mean.weight.data.mul_(0.01)
 
+
+    #scoure: https://github.com/coolvision/vae_conv/blob/master/vae_conv_model_mnist.py
+    def reparametrize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        if torch.cuda.is_available():
+            eps = torch.cuda.FloatTensor(std.size()).normal_()
+        else:
+            eps = torch.FloatTensor(std.size()).normal_()
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu)
+
+
     def forward(self, inputs, states, masks):
+
         x = self.conv1(inputs)
-
         x = self.conv2(x)
-
         x = self.conv3(x)
-
         x = self.conv4(x)
+        x = self.conv5(x)
 
-        x = x.view(-1, 32 * 9 * 14)
+        x = x.view(-1, 32 * 10 * 8)
         x = self.linear1_drop(x)
         x = self.linear1(x)
         x = F.leaky_relu(x)
  
         out = x
+
+        reconstruction, z_mean, z_logvar = None, None, None
+        if self.use_vae:
+            z_mean = self.linearmean(x)
+            z_logvar = self.linearvar(x)
+            z = self.reparametrize(z_mean, z_logvar)
+
+            unx = F.relu(self.unlinearlatent(z))
+            unx = F.relu(self.unlinear1(unx))
+            unx = unx.view(-1, 32, 10, 8)
+
+            unx = self.unconv5(unx)
+            unx = self.unconv4(unx)
+            unx = self.unconv3(unx)
+            unx = self.unconv2(unx)
+            reconstruction = self.unconv1(unx)
+
+            out = z
 
         if hasattr(self, 'gru'):
             if inputs.size(0) == states.size(0):
@@ -146,7 +222,17 @@ class CNNPolicy(FFPolicy):
                     outputs.append(hx)
                 x = torch.cat(outputs, 0)
             out = out + x
-        return self.critic_linear(out), out, states
+
+        return self.critic_linear(out), out, states, reconstruction, z_mean, z_logvar
+
+
+    #source https://github.com/coolvision/vae_conv/blob/master/vae_conv_mnist.py
+    def compute_vae_loss(self, x, recon_x, mu, logvar):
+        #print(recon_x.size(), x.size())
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        MSE = F.l1_loss(x, recon_x)
+        return MSE, KLD
+
 
 
 def weights_init_mlp(m):

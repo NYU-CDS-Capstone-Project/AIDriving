@@ -20,7 +20,10 @@ class ModelLogger(object):
         self.total_episode_lengths_avg = []
         self.total_value_loss = []
         self.total_action_loss = []
+        self.total_recon_loss = []
+        self.total_kld_loss = []
         self.total_entropy = []
+
 
         self.episode_rewards = torch.zeros([num_processes, 1])
         self.final_rewards = torch.zeros([num_processes, 1])
@@ -61,10 +64,12 @@ class ModelLogger(object):
                         self.total_episode_lengths_avg, 
                         self.total_value_loss, 
                         self.total_action_loss, 
-                        self.total_entropy]))
+                        self.total_entropy,
+                        self.total_recon_loss,
+                        self.total_kld_loss]))
 
 
-    def print_log(self, value_loss, action_loss, dist_entropy, num_processes, num_steps, nthupdate, start):
+    def print_log(self, value_loss, action_loss, dist_entropy, recon_loss, kld_loss, num_processes, num_steps, nthupdate, start):
         self.reward_avg = 0.99 * self.reward_avg + 0.01 * self.final_rewards.mean()
         self.length_avg = 0.99 * self.length_avg + 0.01 * self.final_lengths.mean()
         self.total_episode_rewards_avg.append(self.reward_avg)
@@ -72,11 +77,14 @@ class ModelLogger(object):
         self.total_value_loss.append(value_loss)
         self.total_action_loss.append(action_loss)
         self.total_entropy.append(dist_entropy)
+        self.total_recon_loss.append(recon_loss)
+        self.total_kld_loss.append(kld_loss)
+
         end = time.time()
         total_num_steps = (nthupdate + 1) * num_processes * num_steps
 
         print(
-            "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
+            "Updates {}, num timesteps {}, FPS {}, running avg reward {:.3f}, running avg eplen {:2f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, recon loss {:.5f}, kld loss {:.5f}".
             format(
                 nthupdate,
                 total_num_steps,
@@ -85,6 +93,8 @@ class ModelLogger(object):
                 self.length_avg,
                 dist_entropy,
                 value_loss,
-                action_loss
+                action_loss,
+                recon_loss,
+                kld_loss
             )
         )
