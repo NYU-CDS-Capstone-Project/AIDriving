@@ -35,8 +35,8 @@ def main():
     action_shape = 1 if envs.action_space.__class__.__name__ == "Discrete" else envs.action_space.shape[0]
     obs_shape = (envs.observation_space.shape[0] * args.num_stack, *envs.observation_space.shape[1:])
     distribution = 'MixedDistribution' if args.use_mixed else 'DiagGaussian'
-    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, args.use_vae, 
-        args.use_batchnorm, args.use_residual, distribution=distribution)
+    actor_critic = CNNPolicy(obs_shape[0], envs.action_space, args.recurrent_policy, args.use_vae, args.only_ae, 
+        args.use_batchnorm, args.use_residual, args.policy_backprop, distribution=distribution)
     print_model_size(actor_critic)
     print(obs_shape)
     if args.cuda: actor_critic.cuda()
@@ -57,13 +57,24 @@ def main():
     start = time.time()
     for j in range(num_updates):
         #Running an episode
+        '''if j%200 == 0:
+            envs.envs[0].seed(args.seed)
+            obs = envs.reset()
+            current_obs = update_current_obs(obs, current_obs, envs.observation_space.shape[0], args.num_stack)
+            rollouts.observations[0].copy_(current_obs)'''
+
         for step in range(args.num_steps):
             # Sample actions
-            value, action, action_log_prob, states, epsilons = actor_critic.act(
+            value, action, action_log_prob, states, epsilons, recon = actor_critic.act(
                 Variable(rollouts.observations[step]),
                 Variable(rollouts.states[step]),
                 Variable(rollouts.masks[step])
             )
+
+            '''if j%200 == 0 and step%5 == 0:
+                print(current_obs)
+                print(recon)'''
+
             cpu_actions = action.data.squeeze(1).cpu().numpy()
             # Exploration epsilon greedy, ToDo better exploration policy
             if np.random.random_sample() < args.exp_probability:
@@ -89,12 +100,10 @@ def main():
             	if scaled_reward[i] > 0: scaled_reward[i] = (1 + scaled_reward[i])**args.reward_pow - 1
             scaled_reward = torch.from_numpy(np.expand_dims(np.stack(scaled_reward), 1)).float()
 
-
-            if step != 0:
+            '''if step != 0:
                 cur_angle = action[:, 1]
                 scaled_reward -= torch.abs(prev_angle - cur_angle).view(-1).data.cpu()*args.reward_factor
-            prev_angle = action[:, 1]
-
+            prev_angle = action[:, 1]'''
 
             reward = np.clip(reward, a_min=-4.0, a_max=None) + 1.0
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
@@ -145,7 +154,7 @@ def main():
                     Variable(rollouts.states[:-1].index_select(0, indices).view(-1, actor_critic.state_size)),
                     Variable(rollouts.masks[:-1].index_select(0, indices).view(-1, 1)),
                     Variable(rollouts.actions.index_select(0, indices).view(-1, action_shape)),
-                    Variable(rollouts.epsilons.index_select(0, indices).view(-1, actor_critic.epsilon_size)) if args.use_vae else None
+                    Variable(rollouts.epsilons.index_select(0, indices).view(-1, actor_critic.epsilon_size)) if args.use_vae and not args.only_ae else None
                 )
 
                 values = values.view(int(args.num_steps/recurrence_steps), args.num_processes, 1)
@@ -156,14 +165,18 @@ def main():
 
                 action_loss = -(Variable(advantages.data) * action_log_probs).mean()
 
-                loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef + recon_loss + kld
+                k = args.vae_coef
+                
+                if j > args.vae_steps:
+                    loss = value_loss * args.value_loss_coef + action_loss - dist_entropy * args.entropy_coef + k*recon_loss + 0.5*k*kld
+                else: loss = recon_loss + 0.05*kld
 
                 total_value_loss += value_loss.data[0]
                 total_action_loss += action_loss.data[0]
                 total_dist_entropy += dist_entropy.data[0]
                 if args.use_vae:
                     total_recon_loss += recon_loss.data[0]
-                    total_kdl_loss += kld.data[0]
+                    if not args.only_ae: total_kdl_loss += kld.data[0]
                 total_loss += loss
 
                 indices += 1

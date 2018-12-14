@@ -81,6 +81,14 @@ def get_args():
                         help='whether or not use residual block in the CNN policy')
     parser.add_argument('--use-vae', action='store_true', default=False,
                         help='whether or not use VAE')
+    parser.add_argument('--vae-coef', type=float, default=1.0,
+                        help='vae term coefficient (default: 0.01)')
+    parser.add_argument('--policy-backprop', action='store_true', default=False,
+                        help='whether or not backprop policy gradient')
+    parser.add_argument('--only-ae', action='store_true', default=False,
+                        help='whether or not use VAE')
+    parser.add_argument('--vae-steps', type=int, default=5000,
+                        help='number of vae steps in A2C (default: 5)')
 
 
     args = parser.parse_args()
